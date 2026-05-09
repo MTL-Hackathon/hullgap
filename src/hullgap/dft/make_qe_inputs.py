@@ -78,6 +78,7 @@ def coarse_relax_pw_input(
     ecutwfc: float = 40.0,
     ecutrho: float = 320.0,
     kppa: int = 300,
+    press_kbar: float = 0.0,
 ) -> PWInput:
     """
     PBE + spin-polarized coarse relaxation for hackathon screening.
@@ -126,7 +127,7 @@ def coarse_relax_pw_input(
 
     cell = {
         "cell_dynamics": "bfgs",
-        "press": 0.0,
+        "press": press_kbar,
     }
 
     return PWInput(
