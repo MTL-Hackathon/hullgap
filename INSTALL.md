@@ -21,6 +21,17 @@ pip install -e .
 
 On Windows, activate the virtual environment with `.venv\Scripts\activate` instead of `source .venv/bin/activate`.
 
+## Environment variables
+
+Copy `.env.example` to `.env` and fill in your Materials Project API key:
+
+```bash
+cp .env.example .env
+# then edit .env and set MP_API_KEY=<your key>
+```
+
+Get your key at https://materialsproject.org/api.
+
 ## Smoke test
 
 After installation, confirm Python and the editable package:
