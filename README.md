@@ -113,26 +113,24 @@ Generate plausible crystal structures for target systems as quickly as possible.
 
 An ordered Co-Bi candidate set has been generated with `scripts/generate_cobi_dataset.py`
 using pyxtal across reduced stoichiometries with `gcd(m,n)=1`, `m+n<=8`, `Z<=4`,
-all space groups 1-230, and a maximum of 32 atoms per cell. The generated CIFs are
-available in:
+all space groups 1-230, and a maximum of 32 atoms per cell. To keep the repository
+usable on GitHub, the 3,952 generated CIFs are stored in one zip archive:
 
 ```text
-data/candidates/Co-Bi/
+data/candidates/Co-Bi_pyxtal_dataset.zip
 ```
 
-The candidate metadata contract is available at:
+The archive contains:
+
+```text
+Co-Bi/*.cif
+candidate_metadata.csv
+```
+
+The candidate metadata contract is also available as a standalone CSV:
 
 ```text
 data/results/candidate_metadata.csv
-```
-
-Full generation provenance is preserved in:
-
-```text
-data/results/cobi_pyxtal_generation_metadata.csv
-data/results/cobi_pyxtal_run_summary.txt
-data/results/cobi_pyxtal_errors.log
-data/results/cobi_pyxtal_checkpoint_seen_fingerprints.pkl
 ```
 
 ### Main responsibilities
