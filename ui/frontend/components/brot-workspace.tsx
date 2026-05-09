@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowLeft, Loader2, Search, Download, FlaskConical } from "lucide-react";
+import { ArrowLeft, Loader2, Search, Download, FlaskConical, Eye } from "lucide-react";
 import { generateCandidates, validateWithMace } from "@/lib/api-client";
 import type { CandidateResult, MaceResult } from "@/lib/types";
 import { HeroSection } from "./hero-section";
@@ -15,6 +15,7 @@ import { StepTracker, type Step } from "./step-tracker";
 import { CandidateTable } from "./candidate-table";
 import { ResultsTable } from "./results-table";
 import { HullChart } from "./hull-chart";
+import { CrystalViewer } from "./crystal-viewer";
 
 const ELEMENTS = [
   "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
@@ -46,15 +47,18 @@ export function BrotWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [sliderHeight, setSliderHeight] = useState<number | undefined>(undefined);
 
-  const mainRef = useRef<HTMLElement>(null);
-  const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
+  const [viewerVisited, setViewerVisited] = useState(false);
 
-  const stepIndex = step === "input" ? 0 : step === "candidates" ? 1 : 2;
+  const mainRef = useRef<HTMLElement>(null);
+  const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null]);
+
+  const stepIndex = step === "input" ? 0 : step === "candidates" ? 1 : step === "validation" ? 2 : 3;
   const canGenerate = elementA !== elementB;
 
   const goBack = useCallback(() => {
     if (step === "candidates") setStep("input");
     else if (step === "validation") setStep("candidates");
+    else if (step === "viewer") setStep("validation");
   }, [step]);
 
   const scrollToMain = useCallback(() => {
@@ -108,6 +112,7 @@ export function BrotWorkspace() {
     setMaceResults(null);
     setSelected(new Set());
     setError(null);
+    setViewerVisited(false);
   }, []);
 
   const toggleSelect = useCallback((index: number) => {
@@ -234,12 +239,16 @@ export function BrotWorkspace() {
             stepIndex={stepIndex}
             canOpenCandidates={Boolean(candidates)}
             canOpenValidation={Boolean(maceResults)}
+            canOpenViewer={viewerVisited}
             onOpenInput={() => setStep("input")}
             onOpenCandidates={() => {
               if (candidates) setStep("candidates");
             }}
             onOpenValidation={() => {
               if (maceResults) setStep("validation");
+            }}
+            onOpenViewer={() => {
+              if (viewerVisited) setStep("viewer");
             }}
           />
         </div>
@@ -479,7 +488,7 @@ export function BrotWorkspace() {
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       type="button"
                       onClick={downloadCsv}
@@ -488,6 +497,17 @@ export function BrotWorkspace() {
                       <Download className="h-4 w-4" aria-hidden />
                       Download results as CSV
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewerVisited(true);
+                        setStep("viewer");
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--accent)]/35 hover:bg-[var(--accent-dim)]"
+                    >
+                      <Eye className="h-4 w-4" aria-hidden />
+                      View Structures
+                    </button>
                   </div>
                 </div>
               )}
@@ -495,6 +515,16 @@ export function BrotWorkspace() {
                 <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                   {error}
                 </div>
+              )}
+            </div>
+
+            {/* Step 4: Crystal Viewer */}
+            <div
+              ref={(el) => { slideRefs.current[3] = el; }}
+              className="w-full min-w-full shrink-0"
+            >
+              {viewerVisited && (
+                <CrystalViewer elementA={elementA} elementB={elementB} />
               )}
             </div>
           </div>

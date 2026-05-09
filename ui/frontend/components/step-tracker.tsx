@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+export type Step = "input" | "candidates" | "validation" | "viewer";
 
-export type Step = "input" | "candidates" | "validation";
+const TOTAL_STEPS = 4;
 
 interface StepItem {
   n: string;
@@ -17,17 +17,21 @@ export function StepTracker({
   stepIndex,
   canOpenCandidates,
   canOpenValidation,
+  canOpenViewer,
   onOpenInput,
   onOpenCandidates,
   onOpenValidation,
+  onOpenViewer,
 }: {
   step: Step;
   stepIndex: number;
   canOpenCandidates: boolean;
   canOpenValidation: boolean;
+  canOpenViewer: boolean;
   onOpenInput: () => void;
   onOpenCandidates: () => void;
   onOpenValidation: () => void;
+  onOpenViewer: () => void;
 }) {
   const items: StepItem[] = [
     {
@@ -51,10 +55,17 @@ export function StepTracker({
       locked: !canOpenValidation,
       onClick: onOpenValidation,
     },
+    {
+      n: "04",
+      title: "Crystal Viewer",
+      active: step === "viewer",
+      locked: !canOpenViewer,
+      onClick: onOpenViewer,
+    },
   ];
 
   return (
-    <ol className="relative mb-10 grid w-full grid-cols-3 gap-4">
+    <ol className="relative mb-10 grid w-full grid-cols-4 gap-4">
       <div
         aria-hidden
         className="pointer-events-none absolute left-0 right-0 top-[22px] hidden h-px bg-slate-200 sm:block"
@@ -63,9 +74,9 @@ export function StepTracker({
           className="h-full bg-[var(--accent)] transition-[width] duration-500 ease-in-out"
           style={{
             width:
-              stepIndex === 2
+              stepIndex === TOTAL_STEPS - 1
                 ? "100%"
-                : `calc(${((stepIndex + 1) / 3) * 100}% - 10px)`,
+                : `calc(${((stepIndex + 1) / TOTAL_STEPS) * 100}% - 10px)`,
           }}
         />
       </div>

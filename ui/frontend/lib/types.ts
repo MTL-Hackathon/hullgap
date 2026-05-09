@@ -23,3 +23,22 @@ export interface GenerateRequest {
 export interface ValidateRequest {
   candidates: CandidateResult[];
 }
+
+export interface StructureData {
+  prototype: string;
+  formula: string;
+  n_atoms: number;
+  lattice_matrix: [number, number, number][];
+  lattice_params: {
+    a: number;
+    b: number;
+    c: number;
+    alpha: number;
+    beta: number;
+    gamma: number;
+  };
+  volume: number;
+  species: string[];
+  frac_coords: [number, number, number][];
+  cart_coords: [number, number, number][];
+}
