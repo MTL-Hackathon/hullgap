@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Relax random Co-Bi structures at 50 GPa using MACE-MP-0 with multiprocessing.
+Relax structures under applied pressure using MACE-MP-0 with multiprocessing.
 
-Reads extxyz files produced by generate_structures.py, relaxes each
-structure with an applied hydrostatic pressure, and writes results to CSV.
+Reads extxyz files (e.g. from generate_random_structures.py), relaxes each
+structure with an applied hydrostatic pressure via FIRE, and writes results
+to CSV.
 
 Usage:
-    python relax_mace.py [--structures structures] [--pressure 50] [--workers 6]
+    python scripts/relax_mace_pressure.py --structures data/candidates/Co-Bi --pressure 50
+    python scripts/relax_mace_pressure.py --structures data/candidates/Co-Bi --pressure 0 --out data/results
 """
 
 from __future__ import annotations
@@ -119,8 +121,8 @@ def _relax_one(task: dict) -> dict | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Relax Co-Bi structures with MACE-MP-0")
-    ap.add_argument("--structures", default="structures",
-                    help="directory of extxyz files (default: structures/)")
+    ap.add_argument("--structures", default="data/candidates/Co-Bi",
+                    help="directory of extxyz files (default: data/candidates/Co-Bi)")
     ap.add_argument("--pressure", type=float, default=50.0,
                     help="external pressure in GPa (default: 50)")
     ap.add_argument("--model", default="small",
@@ -131,8 +133,8 @@ def main() -> None:
                     help="max optimizer steps per structure (default: 100)")
     ap.add_argument("--workers", type=int, default=0,
                     help="number of worker processes (default: cpu_count - 2)")
-    ap.add_argument("--out", default="results",
-                    help="output directory (default: results/)")
+    ap.add_argument("--out", default="data/results",
+                    help="output directory (default: data/results/)")
     args = ap.parse_args()
 
     struct_dir = Path(args.structures)
