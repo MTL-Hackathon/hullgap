@@ -3,9 +3,8 @@ Formation energies and convex-hull distance for a few DFT totals after MLIP.
 
 Elemental reference energies (per atom) define the formation-energy zero at
 pure Co and pure Bi corners. A 2D lower convex hull in (x_Bi, E_form/atom)
-replaces pymatgen's PhaseDiagram here so this module does not depend on
-matplotlib (pymatgen's PhaseDiagram imports it). For production you may swap
-in a full phase-diagram backend once plotting deps are available.
+is computed with numpy. DFT energies come from Quantum ESPRESSO pw.x (PBE/PAW);
+reference energies must use the same pseudopotential and cutoff setup.
 
 This remains a hackathon prioritization workflow, not a claim of absolute
 thermodynamic stability.

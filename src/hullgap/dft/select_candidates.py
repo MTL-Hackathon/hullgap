@@ -2,7 +2,7 @@
 Select a small subset of MLIP-scored candidates for expensive DFT validation.
 
 Reads hull-score tables produced upstream (MLIP relaxation + hull analysis),
-applies sanity filters, and ranks by energy above hull for hand-off to VASP.
+applies sanity filters, and ranks by energy above hull for hand-off to DFT.
 """
 
 from __future__ import annotations

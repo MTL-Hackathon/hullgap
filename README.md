@@ -177,41 +177,71 @@ Generate at least 50 Co–Bi candidates and 50 candidates across two additional 
 
 ### Goal
 
-Relax generated candidate structures and compute approximate energies using a universal MLIP.
+Relax generated candidate structures and compute approximate screening energies using a universal MLIP. MLIP energies prioritise candidates for DFT validation — they do **not** prove thermodynamic stability on their own.
 
-### Main responsibilities
+### Status: implemented
 
-* Set up CHGNet or another universal MLIP.
-* Create a batch relaxation script.
-* Read candidate CIF/POSCAR files.
-* Relax atomic positions and unit cell.
-* Save relaxed structures and energies.
-* Record failed relaxations cleanly.
+The relaxation pipeline is built around a model-agnostic interface that currently supports two backends:
 
-### Recommended first model
+| Model | Role | Package | Install |
+|-------|------|---------|---------|
+| **CHGNet** | default / primary | `chgnet` | `pip install -e .` (core dep) |
+| **MACE-MP** | optional backup / cross-validation | `mace-torch` | `pip install -e ".[mace]"` |
 
-Use **CHGNet** first because it is practical for a hackathon and integrates well with pymatgen/ASE-style workflows.
-
-Optional second model after the pipeline works:
-
-* MACE-MP,
-* MatterSim,
-* ORB,
-* SevenNet.
-
-### First-pass relaxation settings
+### Code layout
 
 ```text
-force tolerance: 0.05 eV/Å
-max steps: 200–500
-cell relaxation: yes
+src/hullgap/
+  relax.py                       # relax_structure() — model-agnostic entry point
+  calculators/
+    __init__.py                  # get_calculator(model) factory
+    chgnet_calc.py               # CHGNet backend
+    mace_calc.py                 # MACE-MP backend
+
+scripts/
+  relax_batch.py                 # CLI: batch-relax a directory of CIFs
 ```
 
-For top candidates only:
+### Quick start
+
+Default screening run (CHGNet):
+
+```bash
+python scripts/relax_batch.py \
+    --input  data/candidates/Co-Bi \
+    --output data/relaxed/Co-Bi \
+    --model  chgnet \
+    --fmax   0.05 \
+    --max-steps 300
+```
+
+Top-candidate rerun with tighter settings:
+
+```bash
+python scripts/relax_batch.py \
+    --input  data/candidates/Co-Bi \
+    --output data/relaxed/Co-Bi \
+    --model  chgnet \
+    --fmax   0.02 \
+    --max-steps 1000
+```
+
+Cross-validation with MACE-MP (requires `pip install -e ".[mace]"`):
+
+```bash
+python scripts/relax_batch.py \
+    --input  data/candidates/Co-Bi \
+    --output data/relaxed/Co-Bi \
+    --model  mace \
+    --fmax   0.05 \
+    --max-steps 300
+```
+
+### Relaxation settings
 
 ```text
-force tolerance: 0.02 eV/Å
-max steps: 1000
+Default screening:     fmax = 0.05 eV/Å   max_steps = 300   relax_cell = yes
+Top-candidate rerun:   fmax = 0.02 eV/Å   max_steps = 1000  relax_cell = yes
 ```
 
 ### Output files
@@ -222,28 +252,25 @@ Relaxed structures:
 data/relaxed/<SYSTEM>/*.cif
 ```
 
-Relaxation results:
+Relaxation results CSV (one per system × model):
 
 ```text
-data/results/relaxation_results.csv
+data/results/relaxation_results_<SYSTEM>_<MODEL>.csv
 ```
 
-Suggested columns:
+Columns:
 
 ```text
-candidate_id,
-formula,
-status,
-initial_file,
-relaxed_file,
-energy_total_eV,
-energy_per_atom_eV,
-max_force_eV_A,
-volume_per_atom,
-n_steps,
-model_name,
-error_message
+candidate_id, formula, status, initial_file, relaxed_file,
+energy_total_eV, energy_per_atom_eV, max_force_eV_A,
+volume_per_atom, n_steps, model_name, error_message
 ```
+
+Status values: `converged`, `max_steps_reached`, `failed_relaxation`.
+
+### Fault tolerance
+
+The batch script never crashes the whole run because one structure fails. Failed structures are logged with `status=failed_relaxation` and the exception message saved in `error_message`.
 
 ### Early milestone
 
@@ -489,24 +516,26 @@ hullgap/
 
   src/
     hullgap/
-      config.py
-      mp_query.py
-      void_score.py
-      prototype_library.py
-      generate_candidates.py
-      relax_chgnet.py
-      relax_mace.py
-      hull.py
-      deduplicate.py
-      rank.py
-      visualize.py
+      __init__.py
+      relax.py                         # model-agnostic relaxation interface
+      calculators/
+        __init__.py                    # get_calculator() factory
+        chgnet_calc.py                 # CHGNet backend
+        mace_calc.py                   # MACE-MP backend (optional)
+      dft/
+        __init__.py
+        dft_hull.py
+        make_qe_inputs.py
+        parse_qe_outputs.py
+        select_candidates.py
 
   scripts/
-    query_systems.py
-    generate_candidates.py
-    relax_batch.py
-    score_hull.py
-    make_report.py
+    relax_batch.py                     # batch MLIP relaxation CLI
+    select_dft_candidates.py
+    make_qe_inputs.py
+    parse_dft_results.py
+    score_dft_hull.py
+    run_qe_candidate.sh
 
   app/
     streamlit_app.py
@@ -585,7 +614,7 @@ streamlit run app/streamlit_app.py
 
 ## Targeted DFT validation (after MLIP)
 
-The MLIP pipeline ranks many candidates; **DFT is a small validation layer**, not a replacement for MLIP throughput. Only a handful of top structures receive PBE, spin-polarized VASP relaxations. Co-containing binaries can be magnetic, so initial `ISPIN=2` and `MAGMOM` settings matter for a credible first pass. Outputs support **prioritization** for later higher-accuracy study; they are **not** final claims of thermodynamic stability.
+The MLIP pipeline ranks many candidates; **DFT is a small validation layer**, not a replacement for MLIP throughput. Only a handful of top structures receive PBE, spin-polarized **Quantum ESPRESSO** (pw.x) relaxations. Co-containing binaries can be magnetic, so `nspin=2` and `starting_magnetization` settings matter for a credible first pass. Outputs support **prioritization** for later higher-accuracy study; they are **not** final claims of thermodynamic stability.
 
 ```bash
 python scripts/select_dft_candidates.py \
@@ -595,12 +624,16 @@ python scripts/select_dft_candidates.py \
   --max-atoms 40 \
   --out dft/results/dft_candidate_list.csv
 
-python scripts/make_vasp_inputs.py \
+python scripts/make_qe_inputs.py \
   --candidate-list dft/results/dft_candidate_list.csv \
   --outdir dft/inputs/Co-Bi \
-  --preset coarse_relax
+  --preset coarse_relax \
+  --pseudo-dir /path/to/pseudopotentials/pbe
 
-# After VASP runs (e.g. under dft/runs/Co-Bi/<candidate_id>/):
+# Run QE pw.x (copy inputs to dft/runs/Co-Bi/<candidate_id>/ first):
+bash scripts/run_qe_candidate.sh dft/runs/Co-Bi/candidate_demo_001 4
+
+# After QE runs complete:
 python scripts/parse_dft_results.py \
   --run-dir dft/runs/Co-Bi \
   --out dft/results/dft_energies_Co-Bi.csv
@@ -612,7 +645,9 @@ python scripts/score_dft_hull.py \
   --out dft/results/dft_hull_scores_Co-Bi.csv
 ```
 
-Calibrate `dft/reference_energies.yaml` to the same PBE POTCAR / `ENCUT` convention as your elemental reference runs. `POTCAR` files are not generated by HullGap.
+Calibrate `dft/reference_energies.yaml` to the same PBE pseudopotential / ecutwfc convention as your elemental reference runs. See [`.cursor/rules/qe-setup.mdc`](.cursor/rules/qe-setup.mdc) for Quantum ESPRESSO installation instructions.
+
+For an interactive walkthrough with plots, install `pip install -e ".[notebook]"` and open [`notebooks/05_dft_validation.ipynb`](notebooks/05_dft_validation.ipynb) (run Jupyter from the repo root).
 
 ---
 

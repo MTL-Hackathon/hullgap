@@ -1,0 +1,53 @@
+---
+description: Quantum ESPRESSO installation and DFT validation context
+alwaysApply: true
+---
+
+# Quantum ESPRESSO setup
+
+This project uses Quantum ESPRESSO (QE) 7.5 for targeted DFT validation after MLIP screening. QE is open-source and replaces the earlier VASP-based plan.
+
+## Installation (Linux)
+
+Build dependencies (Ubuntu/Debian):
+```
+sudo apt-get install -y gfortran libopenmpi-dev libblas-dev liblapack-dev libfftw3-dev
+```
+
+Download, extract, and build:
+```
+mkdir -p ~/software && cd ~/software
+curl -L -o qe-7.5-ReleasePack.tar.gz \
+  "https://www.quantum-espresso.org/rdm-download/8/v7-5/c660239520162325dd0c670ba0a4b65c/qe-7.5-ReleasePack.tar.gz"
+tar xzf qe-7.5-ReleasePack.tar.gz && cd qe-7.5
+./configure && make -j$(nproc) pw
+echo 'export PATH="$HOME/software/qe-7.5/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify: `pw.x --version` should print `Program PWSCF v.7.5`.
+
+## Pseudopotentials
+
+Download PBE PAW pseudopotentials from the QE library:
+```
+mkdir -p ~/software/pseudopotentials/pbe && cd ~/software/pseudopotentials/pbe
+curl -L -O "https://pseudopotentials.quantum-espresso.org/upf_files/Co.pbe-spn-kjpaw_psl.0.3.1.UPF"
+curl -L -O "https://pseudopotentials.quantum-espresso.org/upf_files/Bi.pbe-dn-kjpaw_psl.1.0.0.UPF"
+```
+
+Pass `--pseudo-dir ~/software/pseudopotentials/pbe` to `scripts/make_qe_inputs.py`.
+
+For new element systems, download matching PBE PAW UPF files from https://pseudopotentials.quantum-espresso.org.
+
+## DFT workflow
+
+DFT validates only the top few MLIP-ranked candidates. It does not replace the MLIP pipeline.
+
+1. `scripts/select_dft_candidates.py` picks top candidates from MLIP hull scores.
+2. `scripts/make_qe_inputs.py` writes pw.x input files (`pw.in` + `metadata.yaml`).
+3. `scripts/run_qe_candidate.sh` runs pw.x via mpirun in a candidate folder.
+4. `scripts/parse_dft_results.py` harvests energies from pw.out into a CSV.
+5. `scripts/score_dft_hull.py` computes formation energies and hull distance.
+
+Elemental reference energies in `dft/reference_energies.yaml` must use the same PBE pseudopotentials and cutoffs as the candidate calculations.

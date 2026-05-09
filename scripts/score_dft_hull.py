@@ -2,8 +2,8 @@
 """
 CLI: formation energies and convex-hull distance for validated DFT totals.
 
-Uses elemental reference energies on the same VASP energy scale; suitable only
-for relative ranking within this hackathon workflow.
+Uses elemental reference energies on the same QE/PBE energy scale; suitable
+only for relative ranking within this hackathon workflow.
 """
 
 from __future__ import annotations

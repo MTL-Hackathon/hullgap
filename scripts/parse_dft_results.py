@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-CLI: harvest energies and structures from finished VASP run directories.
+CLI: harvest energies and structures from finished QE pw.x run directories.
 
-Intended after cluster jobs complete; does not require the VASP executable.
+Intended after calculations complete; does not require the QE binary.
 """
 
 from __future__ import annotations
@@ -12,11 +12,11 @@ import logging
 import sys
 from pathlib import Path
 
-from hullgap.dft.parse_vasp_outputs import parse_run_tree, write_energy_table
+from hullgap.dft.parse_qe_outputs import parse_run_tree, write_energy_table
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Parse VASP outputs under a run tree into a CSV.")
+    p = argparse.ArgumentParser(description="Parse QE pw.x outputs under a run tree into a CSV.")
     p.add_argument("--run-dir", type=Path, required=True, help="Root directory containing candidate run folders.")
     p.add_argument("--out", type=Path, required=True, help="Output CSV path.")
     return p.parse_args()

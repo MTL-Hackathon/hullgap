@@ -1,6 +1,7 @@
-# Per-atom reference energies (eV) consistent with your VASP PBE settings and POTCAR set.
-# Replace with energies from relaxed elemental reference cells (or a documented literature scale).
-# Wrong scales will shift formation energies but relative e_above_hull among candidates is still useful
-# only when all DFT totals use the same pseudopotential / functional setup.
+# Per-atom reference energies (eV) consistent with your QE PBE/PAW pseudopotentials.
+# Replace with energies from relaxed elemental reference cells using the same
+# ecutwfc, ecutrho, and pseudopotential files as your candidate runs.
+# Wrong scales will shift formation energies but relative e_above_hull among
+# candidates is still useful when all DFT totals use the same setup.
 Co: -5.0
 Bi: -4.5

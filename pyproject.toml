@@ -17,13 +17,17 @@ dependencies = [
     "mp-api>=0.39",
     "matplotlib>=3.8",
     "python-dotenv>=1.0",
+    "ase>=3.22",
+    "chgnet>=0.3",
 ]
 
 [project.optional-dependencies]
-mlip = [
+mace = [
     "mace-torch>=0.3",
-    "ase>=3.22",
-    "torch>=1.12",
+]
+notebook = [
+    "jupyterlab>=4.0",
+    "ipykernel>=6.0",
 ]
 
 [tool.setuptools.packages.find]
