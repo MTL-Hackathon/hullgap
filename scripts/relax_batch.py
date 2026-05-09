@@ -11,6 +11,17 @@ python scripts/relax_batch.py \
     --fmax   0.05 \
     --max-steps 300
 
+With trajectory + step-log:
+
+python scripts/relax_batch.py \
+    --input  data/candidates/Co-Bi \
+    --output data/relaxed/Co-Bi \
+    --model  chgnet \
+    --fmax   0.05 \
+    --max-steps 300 \
+    --save-trajectory \
+    --save-step-log
+
 MLIP energies are screening predictions — candidates should be validated with
 DFT before any claims of thermodynamic stability.
 """
@@ -78,6 +89,26 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Custom path for results CSV. Default: data/results/relaxation_results_<SYSTEM>_<MODEL>.csv",
     )
+
+    # Trajectory / step-log options
+    p.add_argument(
+        "--save-trajectory",
+        action="store_true",
+        default=False,
+        help="Save .traj and .extxyz trajectory files for each structure.",
+    )
+    p.add_argument(
+        "--trajectory-dir",
+        type=Path,
+        default=None,
+        help="Directory for trajectory files. Default: data/trajectories/<SYSTEM>",
+    )
+    p.add_argument(
+        "--save-step-log",
+        action="store_true",
+        default=False,
+        help="Save a per-step CSV with energy, forces, volume, and cell parameters.",
+    )
     return p.parse_args()
 
 
@@ -97,6 +128,7 @@ def main() -> int:
     input_dir: Path = args.input.resolve()
     output_dir: Path = args.output.resolve()
     model: str = args.model
+    system = _infer_system_name(input_dir)
 
     if not input_dir.is_dir():
         logger.error("Input directory does not exist: %s", input_dir)
@@ -118,6 +150,14 @@ def main() -> int:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Resolve trajectory directory
+    traj_dir: str | None = None
+    if args.save_trajectory:
+        td = args.trajectory_dir or Path("data/trajectories") / system
+        td.mkdir(parents=True, exist_ok=True)
+        traj_dir = str(td)
+        logger.info("Trajectories will be saved to %s", traj_dir)
+
     try:
         calc = get_calculator(model)
     except ImportError as exc:
@@ -125,6 +165,8 @@ def main() -> int:
         return 1
 
     results: list[dict] = []
+    all_step_rows: list[dict] = []
+
     for cif_path in tqdm(cif_files, desc=f"Relaxing ({model})", unit="struct"):
         out_cif = output_dir / cif_path.name
         rec = relax_structure(
@@ -134,13 +176,21 @@ def main() -> int:
             fmax=args.fmax,
             max_steps=args.max_steps,
             relax_cell=args.relax_cell,
+            save_trajectory=args.save_trajectory,
+            trajectory_dir=traj_dir,
+            save_step_log=args.save_step_log,
             _calculator=calc,
         )
+
+        step_log = rec.pop("_step_log", None)
+        if step_log:
+            all_step_rows.extend(step_log)
+
         results.append(rec)
 
+    # --- Write main results CSV ---
     df = pd.DataFrame(results)
 
-    system = _infer_system_name(input_dir)
     if args.results_csv is not None:
         csv_path = args.results_csv
     else:
@@ -149,6 +199,13 @@ def main() -> int:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(csv_path, index=False)
     logger.info("Wrote relaxation results to %s", csv_path)
+
+    # --- Write per-step log CSV ---
+    if all_step_rows:
+        step_csv = Path("data/results") / f"relaxation_steps_{system}_{model}.csv"
+        step_csv.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(all_step_rows).to_csv(step_csv, index=False)
+        logger.info("Wrote per-step log (%d rows) to %s", len(all_step_rows), step_csv)
 
     n_ok = (df["status"] != "failed_relaxation").sum()
     n_fail = (df["status"] == "failed_relaxation").sum()

@@ -1,0 +1,9 @@
+material_id,formula_pretty,energy_above_hull,true_label,predicted_label,predicted_probability,correct
+mp-10260,Ni3Sb,0.069725850000001,unstable,stable,0.9747,False
+mp-672371,Ni3Sb,0.031380285,stable,stable,0.9804,True
+mp-976847,Ni3Sb,0.044902887500001,stable,stable,0.6757,True
+mp-976893,Ni3Sb,0.047439457500001,stable,unstable,0.4015,False
+mp-2409,Ni5Sb2,0.024253112142854003,stable,stable,0.982,True
+mp-810,NiSb,0.0,stable,stable,0.8849,True
+mp-19895,NiSb2,0.0,stable,stable,0.9897,True
+mp-1106023,NiSb3,0.015611355,stable,stable,0.9847,True

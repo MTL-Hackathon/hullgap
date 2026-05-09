@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate random crystal structures for a Co-Bi convex hull search.
+Generate random crystal structures for a binary convex hull search.
 
 Mimics AIRSS: random lattices, random fractional coordinates, minimum
-separation constraints, optional symmetry.  Writes structures as extxyz
-files under structures/.
+separation constraints.  Writes structures as extxyz files.
 
 Usage:
-    python generate_structures.py [--n-per-comp 80] [--out structures]
+    python scripts/generate_random_structures.py --system Co-Bi --n-per-comp 80
+    python scripts/generate_random_structures.py --system Co-Bi --n-per-comp 20 --out data/candidates/Co-Bi
 """
 
 from __future__ import annotations
@@ -98,56 +98,55 @@ def place_atoms(cell: np.ndarray, n_atoms: int) -> np.ndarray | None:
     return np.array(positions)
 
 
-def make_atoms(n_co: int, n_bi: int) -> Atoms | None:
-    """Build one random Atoms object for a given atom count."""
-    n_atoms = n_co + n_bi
+def make_atoms_from_symbols(symbols: list[str]) -> Atoms | None:
+    """Build one random Atoms object for the given symbol list."""
+    n_atoms = len(symbols)
     cell = random_lattice(n_atoms)
     pos = place_atoms(cell, n_atoms)
     if pos is None:
         return None
-    symbols = ["Co"] * n_co + ["Bi"] * n_bi
-    RNG.shuffle(symbols)
     atoms = Atoms(symbols=symbols, positions=pos, cell=cell, pbc=True)
     return atoms
 
 
-def generate_all(n_per_comp: int, out_dir: Path) -> int:
+def generate_all(
+    el_a: str, el_b: str, compositions: list[tuple[int, int]],
+    n_per_comp: int, out_dir: Path,
+) -> int:
     """Generate random structures for every composition and write extxyz."""
     out_dir.mkdir(parents=True, exist_ok=True)
     total = 0
 
-    for n_co_fu, n_bi_fu in COMPOSITIONS:
-        is_pure = n_co_fu == 0 or n_bi_fu == 0
+    for n_a_fu, n_b_fu in compositions:
+        is_pure = n_a_fu == 0 or n_b_fu == 0
         nf_lo, nf_hi = NFORM_RANGE["pure" if is_pure else "binary"]
-        atoms_per_fu = n_co_fu + n_bi_fu
 
         generated = 0
         batch: list[Atoms] = []
 
         while generated < n_per_comp:
             nform = int(RNG.integers(nf_lo, nf_hi + 1))
-            n_co = n_co_fu * nform
-            n_bi = n_bi_fu * nform
-            n_atoms = n_co + n_bi
+            n_a = n_a_fu * nform
+            n_b = n_b_fu * nform
+            n_atoms = n_a + n_b
             if n_atoms > 24:
                 continue
 
-            atoms = make_atoms(n_co, n_bi)
+            symbols = [el_a] * n_a + [el_b] * n_b
+            RNG.shuffle(symbols)
+            atoms = make_atoms_from_symbols(symbols)
             if atoms is None:
                 continue
 
-            atoms.info["n_Co"] = n_co
-            atoms.info["n_Bi"] = n_bi
-            atoms.info["composition"] = f"Co{n_co}Bi{n_bi}" if n_co and n_bi else (
-                f"Co{n_co}" if n_co else f"Bi{n_bi}"
-            )
+            atoms.info[f"n_{el_a}"] = n_a
+            atoms.info[f"n_{el_b}"] = n_b
+            atoms.info["composition"] = Atoms(symbols).get_chemical_formula(mode="metal")
             batch.append(atoms)
             generated += 1
 
-        if is_pure:
-            tag = f"Co{n_co_fu}" if n_co_fu else f"Bi{n_bi_fu}"
-        else:
-            tag = f"Co{n_co_fu}Bi{n_bi_fu}"
+        def _tag(el, n):
+            return "" if n == 0 else el if n == 1 else f"{el}{n}"
+        tag = _tag(el_a, n_a_fu) + _tag(el_b, n_b_fu)
 
         fname = out_dir / f"{tag}.extxyz"
         write(str(fname), batch, format="extxyz")
@@ -158,16 +157,23 @@ def generate_all(n_per_comp: int, out_dir: Path) -> int:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Generate random Co-Bi structures")
+    ap = argparse.ArgumentParser(description="Generate random binary crystal structures")
+    ap.add_argument("--system", type=str, default="Co-Bi",
+                    help="binary system, e.g. Co-Bi (default: Co-Bi)")
     ap.add_argument("--n-per-comp", type=int, default=80,
                     help="structures per composition (default 80)")
-    ap.add_argument("--out", type=str, default="structures",
-                    help="output directory (default: structures/)")
+    ap.add_argument("--out", type=str, default=None,
+                    help="output directory (default: data/candidates/<SYSTEM>)")
     args = ap.parse_args()
 
-    out = Path(args.out)
-    print(f"Generating {args.n_per_comp} structures per composition ...")
-    n = generate_all(args.n_per_comp, out)
+    elements = [e.strip() for e in args.system.replace("–", "-").split("-")]
+    if len(elements) != 2:
+        raise SystemExit(f"Expected binary system like Co-Bi, got {args.system!r}")
+    el_a, el_b = elements
+
+    out = Path(args.out) if args.out else Path(f"data/candidates/{args.system}")
+    print(f"Generating {args.n_per_comp} random structures per composition for {el_a}-{el_b} ...")
+    n = generate_all(el_a, el_b, COMPOSITIONS, args.n_per_comp, out)
     print(f"Total: {n} structures written to {out}/")
 
 
