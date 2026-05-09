@@ -36,9 +36,21 @@ warnings.filterwarnings("ignore")
 
 REQUIRED_COLS = ["cif_filename", "formula", "space_group", "n_atoms", "n_Co", "n_Bi"]
 
-# Metadata columns that pass through to outputs but are NOT model features
-PASSTHROUGH_COLS = ["volume", "density", "packing_fraction",
-                    "min_CoCo", "min_BiBi", "min_CoBi", "fingerprint"]
+# Metadata columns that pass through to outputs unchanged (not model features)
+PASSTHROUGH_COLS = ["volume", "density", "fingerprint"]
+
+# Geometry features — computed by preprocess_candidates.py, used as model inputs.
+# Co-Bi specific names are mapped to generic names in derive_columns() so they
+# align with how the model was trained (alphabetically sorted element pairs).
+# A = alphabetically first element = Bi in Co-Bi
+# B = alphabetically second element = Co in Co-Bi
+GEOM_FEAT_COLS = [
+    "min_AB_dist",       # min Bi-Co distance  (← min_CoBi in metadata)
+    "min_AA_dist",       # min Bi-Bi distance  (← min_BiBi in metadata)
+    "min_BB_dist",       # min Co-Co distance  (← min_CoCo in metadata)
+    "packing_fraction",  # hard-sphere packing (← packing_fraction in metadata)
+    "volume_per_atom",   # cell vol / n_atoms  (← volume_per_atom in metadata)
+]
 
 CS_COLS = [
     "cs_Cubic", "cs_Hexagonal", "cs_Monoclinic", "cs_Orthorhombic",
@@ -127,10 +139,32 @@ def derive_columns(df: pd.DataFrame) -> pd.DataFrame:
     df["co_fraction"]     = df["n_Co"] / df["n_atoms"]
 
     # internal aliases expected by featurize() and diversified_top_n()
-    df["sg_number"]        = df["space_group"]
-    df["formula_pretty"]   = df["reduced_formula"]
-    df["nsites"]           = df["n_atoms"]
+    df["sg_number"]         = df["space_group"]
+    df["formula_pretty"]    = df["reduced_formula"]
+    df["nsites"]            = df["n_atoms"]
     df["spacegroup_number"] = df["space_group"]
+
+    # Map Co-Bi specific distance column names to the generic names used during
+    # training (alphabetically sorted: A=Bi, B=Co for the Co-Bi system).
+    # If any source column is missing the generic column is set to NaN and
+    # imputed with the training median inside featurize().
+    col_map = {
+        "min_CoBi":          "min_AB_dist",
+        "min_BiBi":          "min_AA_dist",
+        "min_CoCo":          "min_BB_dist",
+        # packing_fraction and volume_per_atom keep the same name
+    }
+    for src, dst in col_map.items():
+        if src in df.columns:
+            df[dst] = pd.to_numeric(df[src], errors="coerce")
+        elif dst not in df.columns:
+            df[dst] = np.nan
+
+    for col in ["packing_fraction", "volume_per_atom"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        else:
+            df[col] = np.nan
 
     return df
 
@@ -324,6 +358,11 @@ def featurize(df: pd.DataFrame, feat_cols: list[str],
         index=df.index,
     )
     df = pd.concat([df, comp_df], axis=1)
+
+    # -- ensure geometry features are present (NaN if not computed) --
+    for col in GEOM_FEAT_COLS:
+        if col not in df.columns:
+            df[col] = np.nan
 
     # -- align to training feature order --
     for col in feat_cols:

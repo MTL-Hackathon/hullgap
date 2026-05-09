@@ -1,6 +1,11 @@
 [
   "spacegroup_number",
   "nsites",
+  "min_AB_dist",
+  "min_AA_dist",
+  "min_BB_dist",
+  "packing_fraction",
+  "volume_per_atom",
   "composition_A_fraction",
   "n_atoms_parity",
   "cs_Cubic",
