@@ -5,3 +5,8 @@ __pycache__/
 .venv/
 venv/
 .env
+
+# Local VASP / DFT run outputs (fixtures live under data/)
+dft/inputs/
+dft/results/
+dft/runs/

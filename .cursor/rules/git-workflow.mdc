@@ -1,0 +1,27 @@
+---
+description: Git and collaboration workflow for this repository
+alwaysApply: true
+---
+
+# Git workflow
+
+This repository is edited by multiple people during a hackathon.
+
+Rules:
+- Never make broad, unrelated edits.
+- Prefer small, reviewable changes.
+- Do not edit files outside the current task unless necessary.
+- Before changing shared interfaces, inspect downstream callers.
+- Do not rename public functions, scripts, or data paths without updating all references.
+- Keep demo commands stable: `bash scripts/run_demo.sh` should remain the final integration entrypoint.
+
+Branch workflow:
+- Work on a feature branch.
+- Commit small logical changes.
+- Open a pull request into `dev`.
+- Merge `dev` into `main` only when the demo works.
+
+Before opening a PR:
+- Run `bash scripts/test.sh`.
+- Update README/INSTALL if setup or usage changed.
+- Summarize changed files and any limitations.
