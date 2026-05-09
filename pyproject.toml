@@ -33,6 +33,7 @@ notebook = [
 ]
 ui = [
     "streamlit>=1.30",
+    "plotly>=5.18",
 ]
 all = [
     "hullgap[mace,notebook,ui]",
