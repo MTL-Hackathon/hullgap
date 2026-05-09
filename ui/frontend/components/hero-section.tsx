@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
-import { HeroSphere } from "./hero-sphere";
+import { CrystalLatticeBg } from "./crystal-lattice-bg";
 
 interface Props {
   onGetStarted: () => void;
@@ -27,8 +27,8 @@ export function HeroSection({ onGetStarted }: Props) {
       }}
       onMouseLeave={() => setHeroMouse({ x: 0, y: 0, hovered: false })}
     >
-      <div className="pointer-events-none absolute inset-0" style={{ opacity: 0.45 }}>
-        <HeroSphere
+      <div className="pointer-events-none absolute inset-0" style={{ opacity: 0.6 }}>
+        <CrystalLatticeBg
           mouseX={heroMouse.x}
           mouseY={heroMouse.y}
           isHovered={heroMouse.hovered}
