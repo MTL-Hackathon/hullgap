@@ -1,0 +1,6 @@
+candidate_id,source,source_label,target_formula,space_group,n_atoms,stoichiometry,file_path
+aflow_AB_oC8_63_c_a,AFLOW,AB_oC8_63_c_a (TlI),CoBi,Cmcm,8,CoBi,data\candidates\Co-Bi\aflow_AB_oC8_63_c_a_CoBi.cif
+aflow_AB_hP4_194_c_a,AFLOW,AB_hP4_194_c_a (NiAs),CoBi,P6_3/mmc,4,CoBi,data\candidates\Co-Bi\aflow_AB_hP4_194_c_a_CoBi.cif
+aflow_AB2_hP3_191_a_d,AFLOW,AB2_hP3_191_a_d (AlB2),CoBi2,P6/mmm,3,CoBi2,data\candidates\Co-Bi\aflow_AB2_hP3_191_a_d_CoBi.cif
+aflow_AB3_oC16_63_c_cf,AFLOW,AB3_oC16_63_c_cf (PuBr3),CoBi3,Cmcm,16,CoBi3,data\candidates\Co-Bi\aflow_AB3_oC16_63_c_cf_CoBi.cif
+aflow_AB_hP2_187_d_a,AFLOW,AB_hP2_187_d_a (WC),CoBi,P-6m2,2,CoBi,data\candidates\Co-Bi\aflow_AB_hP2_187_d_a_CoBi.cif
