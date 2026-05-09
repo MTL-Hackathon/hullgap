@@ -1,5 +1,3 @@
-# hullgap
-
 # HullGap Task Breakdown
 
 ## Project goal
