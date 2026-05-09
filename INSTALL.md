@@ -21,11 +21,15 @@ Core packages (installed automatically with `pip install -e .`):
 - `python-dotenv>=1.0` — load `.env` files
 - `ase>=3.22` — Atomic Simulation Environment (structure I/O, dynamics)
 - `chgnet>=0.3` — CHGNet universal MLIP (default relaxation model)
+- `scipy>=1.10` — scientific computing (convex hulls, optimization)
 
 Optional packages:
 
 - `mace-torch>=0.3` — MACE-MP interatomic potential (install with `pip install -e ".[mace]"`)
 - `jupyterlab`, `ipykernel` — notebook support (install with `pip install -e ".[notebook]"`)
+- `streamlit>=1.30` — BROT web UI (install with `pip install -e ".[ui]"`)
+
+To install everything at once: `pip install -e ".[all]"`
 
 ## Setup
 
@@ -99,6 +103,19 @@ python -c "from mace.calculators import mace_mp; print('MACE import OK')"
 After installation, pass `--model mace` to `scripts/relax_batch.py`.  If
 `mace-torch` is not installed, the script will print a clear error message and
 exit without crashing.
+
+## Streamlit UI — Project BROT (optional)
+
+The BROT (**B**eyond-DFT **R**apid **O**ptimization **T**oolkit) web UI provides
+an interactive interface for candidate generation and MACE validation.
+
+```bash
+pip install -e ".[ui]"
+streamlit run ui/app.py
+```
+
+The app opens at `http://localhost:8501`. Select two elements, set a candidate
+count, and step through the generation → selection → MACE validation workflow.
 
 ## Quantum ESPRESSO (optional, for DFT validation)
 
