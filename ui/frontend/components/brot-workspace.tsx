@@ -259,7 +259,7 @@ export function BrotWorkspace() {
           style={{ height: sliderHeight }}
         >
           <div
-            className="flex transition-transform duration-500 ease-in-out will-change-transform"
+            className="flex items-start transition-transform duration-500 ease-in-out will-change-transform"
             style={{ transform: `translateX(-${stepIndex * 100}%)` }}
           >
             {/* Step 1: Element Selection */}
