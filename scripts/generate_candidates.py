@@ -49,7 +49,7 @@ REPLACE_ELEMENTS: dict[str, str] = {"Ni": "Co", "Fe": "Co", "Mn": "Co", "Cu": "C
 # Space group numbers used for matching (robust across symbol notation variants).
 FREEDMAN_TARGETS: list[dict[str, Any]] = [
     {
-        "name": "α-CoBi₂",
+        "name": "alpha-CoBi2",
         "source_system": "Ni-Bi",
         "source_formula": "NiBi2",
         "target_formula": "CoBi2",
@@ -58,7 +58,7 @@ FREEDMAN_TARGETS: list[dict[str, Any]] = [
         "note": "",
     },
     {
-        "name": "β-CoBi",
+        "name": "beta-CoBi",
         "source_system": "Ni-Bi",
         "source_formula": "NiBi",
         "target_formula": "CoBi",
@@ -67,7 +67,7 @@ FREEDMAN_TARGETS: list[dict[str, Any]] = [
         "note": "",
     },
     {
-        "name": "β-CoBi₂",
+        "name": "beta-CoBi2",
         "source_system": "Fe-Bi",
         "source_formula": "FeBi2",
         "target_formula": "CoBi2",
@@ -76,13 +76,13 @@ FREEDMAN_TARGETS: list[dict[str, Any]] = [
         "note": "",
     },
     {
-        "name": "α-CoBi",
+        "name": "alpha-CoBi",
         "source_system": "Cu-Bi",
         "source_formula": "Cu11Bi7",
         "target_formula": "Co11Bi7",
         "sg_number": 194,
         "sg_symbol": "P6_3/mmc",
-        "note": "11:7 ratio → filtered by stoichiometry constraint (not 1:1/1:2/1:3)",
+        "note": "11:7 ratio -> filtered by stoichiometry (not 1:1/1:2/1:3)",
     },
 ]
 

@@ -1,0 +1,7 @@
+candidate_id,source_system,source_formula,source_mp_id,target_formula,n_atoms,space_group,file_path
+mp-1220533_CoBi,Ni-Bi,NiBi,mp-1220533,CoBi,32,Cm,data\candidates\Co-Bi\mp-1220533_CoBi.cif
+mp-22861_CoBi,Ni-Bi,NiBi,mp-22861,CoBi,4,P6_3/mmc,data\candidates\Co-Bi\mp-22861_CoBi.cif
+mp-999318_CoBi,Ni-Bi,NiBi,mp-999318,CoBi,4,P6_3/mmc,data\candidates\Co-Bi\mp-999318_CoBi.cif
+mp-23179_CoBi3,Ni-Bi,NiBi3,mp-23179,CoBi3,16,Pnma,data\candidates\Co-Bi\mp-23179_CoBi3.cif
+mp-1221736_CoBi,Mn-Bi,MnBi,mp-1221736,CoBi,8,Pmma,data\candidates\Co-Bi\mp-1221736_CoBi.cif
+mp-1185989_CoBi3,Mn-Bi,MnBi3,mp-1185989,CoBi3,4,Pm-3m,data\candidates\Co-Bi\mp-1185989_CoBi3.cif
