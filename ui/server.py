@@ -39,6 +39,12 @@ COMPOSITIONS: list[tuple[int, int]] = [
 NFORM_RANGE = {"pure": (1, 8), "binary": (1, 4)}
 MAX_ATOMS = 24
 
+CRYSTAL_SYSTEMS = [
+    "Triclinic", "Monoclinic", "Orthorhombic",
+    "Tetragonal", "Trigonal", "Hexagonal", "Cubic",
+]
+CRYSTAL_SYSTEM_WEIGHTS = [0.25, 0.20, 0.15, 0.12, 0.08, 0.10, 0.10]
+
 
 def _reduced_formula(n_a: int, n_b: int, el_a: str, el_b: str) -> str:
     if n_a == 0:
@@ -66,6 +72,7 @@ class CandidateItem(BaseModel):
     formation_energy_eV_atom: float
     e_above_hull_eV_atom: float
     predicted_stable: bool
+    crystal_system: str
 
 
 class ValidateRequest(BaseModel):
@@ -113,6 +120,7 @@ def generate(req: GenerateRequest):
                 "formation_energy_eV_atom": round(fe, 4),
                 "e_above_hull_eV_atom": round(e_hull, 4),
                 "predicted_stable": e_hull < 0.025,
+                "crystal_system": RNG.choice(CRYSTAL_SYSTEMS, p=CRYSTAL_SYSTEM_WEIGHTS),
             })
 
             if len(rows) >= target:
@@ -139,6 +147,7 @@ def generate(req: GenerateRequest):
             "formation_energy_eV_atom": round(fe, 4),
             "e_above_hull_eV_atom": round(e_hull, 4),
             "predicted_stable": e_hull < 0.025,
+            "crystal_system": RNG.choice(CRYSTAL_SYSTEMS, p=CRYSTAL_SYSTEM_WEIGHTS),
         })
 
     result = sorted(rows[:target], key=lambda r: r["e_above_hull_eV_atom"])

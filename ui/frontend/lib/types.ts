@@ -6,6 +6,7 @@ export interface CandidateResult {
   formation_energy_eV_atom: number;
   e_above_hull_eV_atom: number;
   predicted_stable: boolean;
+  crystal_system: string;
 }
 
 export interface MaceResult extends CandidateResult {

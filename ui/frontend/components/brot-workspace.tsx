@@ -46,6 +46,7 @@ export function BrotWorkspace() {
   const [valLoading, setValLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sliderHeight, setSliderHeight] = useState<number | undefined>(undefined);
+  const [crystalSystemFilter, setCrystalSystemFilter] = useState<Set<string>>(new Set());
 
   const [viewerVisited, setViewerVisited] = useState(false);
 
@@ -73,6 +74,7 @@ export function BrotWorkspace() {
     setCandidates(null);
     setMaceResults(null);
     setSelected(new Set());
+    setCrystalSystemFilter(new Set());
     try {
       const res = await generateCandidates(elementA, elementB, nCandidates);
       setCandidates(res);
@@ -111,6 +113,7 @@ export function BrotWorkspace() {
     setCandidates(null);
     setMaceResults(null);
     setSelected(new Set());
+    setCrystalSystemFilter(new Set());
     setError(null);
     setViewerVisited(false);
   }, []);
@@ -123,14 +126,6 @@ export function BrotWorkspace() {
       return next;
     });
   }, []);
-
-  const toggleSelectAll = useCallback(() => {
-    if (!candidates) return;
-    setSelected((prev) => {
-      if (prev.size === candidates.length) return new Set();
-      return new Set(candidates.map((_, i) => i));
-    });
-  }, [candidates]);
 
   const downloadCsv = useCallback(() => {
     if (!maceResults) return;
@@ -175,6 +170,50 @@ export function BrotWorkspace() {
       stable: r.mace_stable,
     }));
   }, [maceResults]);
+
+  const uniqueCrystalSystems = useMemo(() => {
+    if (!candidates) return [];
+    const systems = new Set(candidates.map((c) => c.crystal_system));
+    return Array.from(systems).sort();
+  }, [candidates]);
+
+  const filteredIndices = useMemo(() => {
+    if (!candidates) return [];
+    if (crystalSystemFilter.size === 0) {
+      return candidates.map((_, i) => i);
+    }
+    return candidates
+      .map((c, i) => (crystalSystemFilter.has(c.crystal_system) ? i : -1))
+      .filter((i) => i !== -1);
+  }, [candidates, crystalSystemFilter]);
+
+  const filteredCandidates = useMemo(() => {
+    if (!candidates) return [];
+    return filteredIndices.map((i) => candidates[i]);
+  }, [candidates, filteredIndices]);
+
+  const toggleCrystalSystem = useCallback((system: string) => {
+    setCrystalSystemFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(system)) next.delete(system);
+      else next.add(system);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (!candidates) return;
+    setSelected((prev) => {
+      const allFilteredSelected = filteredIndices.every((i) => prev.has(i));
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredIndices.forEach((i) => next.delete(i));
+      } else {
+        filteredIndices.forEach((i) => next.add(i));
+      }
+      return next;
+    });
+  }, [candidates, filteredIndices]);
 
   useEffect(() => {
     const el = slideRefs.current[stepIndex];
@@ -411,13 +450,49 @@ export function BrotWorkspace() {
                         </h3>
                         <p className="mt-1 text-xs text-slate-400">
                           {selected.size} of {candidates.length} selected
+                          {crystalSystemFilter.size > 0 && (
+                            <span> &middot; showing {filteredCandidates.length} of {candidates.length}</span>
+                          )}
                         </p>
                       </div>
                     </div>
+
+                    {uniqueCrystalSystems.length > 0 && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-slate-400">
+                          Crystal system
+                        </span>
+                        {uniqueCrystalSystems.map((sys) => (
+                          <button
+                            key={sys}
+                            type="button"
+                            onClick={() => toggleCrystalSystem(sys)}
+                            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                              crystalSystemFilter.has(sys)
+                                ? "border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--accent-dark)]"
+                                : "border-[var(--border)] bg-[var(--input-bg)] text-[var(--foreground)] hover:border-[var(--accent)]/35 hover:bg-[var(--accent-dim)]"
+                            }`}
+                          >
+                            {sys}
+                          </button>
+                        ))}
+                        {crystalSystemFilter.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setCrystalSystemFilter(new Set())}
+                            className="text-xs font-medium text-slate-400 underline-offset-4 hover:text-[var(--foreground)] hover:underline"
+                          >
+                            Clear filter
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-4">
                       <CandidateTable
-                        candidates={candidates}
+                        candidates={filteredCandidates}
                         selected={selected}
+                        originalIndices={filteredIndices}
                         onToggle={toggleSelect}
                         onToggleAll={toggleSelectAll}
                       />
