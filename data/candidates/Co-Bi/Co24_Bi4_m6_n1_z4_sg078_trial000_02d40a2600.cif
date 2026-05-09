@@ -1,0 +1,54 @@
+# generated using pymatgen
+data_Co6Bi
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   15.93016631
+_cell_length_b   15.93016631
+_cell_length_c   8.44306103
+_cell_angle_alpha   90.00000000
+_cell_angle_beta   90.00000000
+_cell_angle_gamma   90.00000000
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Co6Bi
+_chemical_formula_sum   'Co24 Bi4'
+_cell_volume   2142.59727540
+_cell_formula_units_Z   4
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Bi  Bi0  1  0.00340163  0.29180932  0.18899139  1
+  Bi  Bi1  1  0.99659837  0.70819068  0.68899139  1
+  Bi  Bi2  1  0.70819068  0.00340163  0.93899139  1
+  Bi  Bi3  1  0.29180932  0.99659837  0.43899139  1
+  Co  Co4  1  0.96561425  0.31925857  0.50747376  1
+  Co  Co5  1  -0.96561425  -0.31925857  1.00747376  1
+  Co  Co6  1  -0.31925857  0.96561425  1.25747376  1
+  Co  Co7  1  0.31925857  -0.96561425  0.75747376  1
+  Co  Co8  1  0.39647196  0.53144097  0.33128091  1
+  Co  Co9  1  0.60352804  0.46855903  0.83128091  1
+  Co  Co10  1  0.46855903  0.39647196  0.08128091  1
+  Co  Co11  1  0.53144097  0.60352804  0.58128091  1
+  Co  Co12  1  0.51233066  0.39500295  0.85780752  1
+  Co  Co13  1  0.48766934  0.60499705  0.35780752  1
+  Co  Co14  1  0.60499705  0.51233066  0.60780752  1
+  Co  Co15  1  0.39500295  0.48766934  0.10780752  1
+  Co  Co16  1  0.56239952  0.22342203  0.19327113  1
+  Co  Co17  1  0.43760048  0.77657797  0.69327113  1
+  Co  Co18  1  0.77657797  0.56239952  0.94327113  1
+  Co  Co19  1  0.22342203  0.43760048  0.44327113  1
+  Co  Co20  1  0.15803050  0.52212677  0.23658352  1
+  Co  Co21  1  0.84196950  0.47787323  0.73658352  1
+  Co  Co22  1  0.47787323  0.15803050  0.98658352  1
+  Co  Co23  1  0.52212677  0.84196950  0.48658352  1
+  Co  Co24  1  0.17614100  0.25355824  0.03082411  1
+  Co  Co25  1  0.82385900  0.74644176  0.53082411  1
+  Co  Co26  1  0.74644176  0.17614100  0.78082411  1
+  Co  Co27  1  0.25355824  0.82385900  0.28082411  1

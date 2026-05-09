@@ -21,6 +21,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "ase>=3.22",
     "chgnet>=0.3",
+    "pyxtal>=0.6.7",
 ]
 
 [project.optional-dependencies]

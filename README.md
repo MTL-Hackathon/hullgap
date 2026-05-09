@@ -109,6 +109,32 @@ Within the first few hours, produce a ranked table of at least 20 systems with v
 
 Generate plausible crystal structures for target systems as quickly as possible.
 
+### Status: Co-Bi ordered pyxtal dataset generated
+
+An ordered Co-Bi candidate set has been generated with `scripts/generate_cobi_dataset.py`
+using pyxtal across reduced stoichiometries with `gcd(m,n)=1`, `m+n<=8`, `Z<=4`,
+all space groups 1-230, and a maximum of 32 atoms per cell. The generated CIFs are
+available in:
+
+```text
+data/candidates/Co-Bi/
+```
+
+The candidate metadata contract is available at:
+
+```text
+data/results/candidate_metadata.csv
+```
+
+Full generation provenance is preserved in:
+
+```text
+data/results/cobi_pyxtal_generation_metadata.csv
+data/results/cobi_pyxtal_run_summary.txt
+data/results/cobi_pyxtal_errors.log
+data/results/cobi_pyxtal_checkpoint_seen_fingerprints.pkl
+```
+
 ### Main responsibilities
 
 * Build a prototype-transfer pipeline.

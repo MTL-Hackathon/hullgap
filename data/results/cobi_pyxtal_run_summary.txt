@@ -1,0 +1,24 @@
+Co-Bi dataset generation summary
+finished_utc: 2026-05-09T21:08:31.090393+00:00
+output_dir: C:\Users\Win11 Pro\Documents\Master HS25_26\Master Thesis US\MTI Hackathon\dataset_generation\co_bi_dataset
+quick_test: False
+max_reduced_formula_atoms: 8
+max_z: 4
+max_atoms: 32
+trials: 1
+workers: 7
+tasks_total: 19320
+accepted_written: 3075
+duplicates_skipped: 877
+prefilter_rejected: 4498
+errors: 10870
+elapsed_seconds: 786.62
+
+Scientific bounds
+system: Co-Bi only
+ordered_structures_only: true
+partial_occupancy: false
+space_groups: 1-230
+MAX_Z: 4
+MAX_ATOMS_PER_CELL: 32
+EnumerateStructureTransformation: not used
