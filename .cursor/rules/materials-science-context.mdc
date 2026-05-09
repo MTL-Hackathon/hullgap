@@ -1,0 +1,21 @@
+---
+description: Materials science assumptions and terminology for crystal stability prediction
+alwaysApply: true
+---
+
+# Materials science context
+
+This project searches for candidate crystal structures that may be thermodynamically stable.
+
+Use beginner-friendly explanations when introducing materials science terms.
+
+Important concepts:
+- Formation energy: energy of a compound relative to its constituent elements.
+- Convex hull: the lower envelope of formation energies across compositions; structures on or below it are predicted stable.
+- Energy above hull: how far a candidate is above the current stability threshold.
+- MLIP: machine-learned interatomic potential, a model that approximates atomic energies and forces faster than DFT.
+
+For hackathon scope:
+- Prefer approximate screening plus clear validation over exhaustive search.
+- Always separate candidate generation, relaxation/scoring, and validation.
+- Save intermediate structures and scores.

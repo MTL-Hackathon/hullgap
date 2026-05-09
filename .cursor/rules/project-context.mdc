@@ -1,0 +1,22 @@
+---
+description: General project context for the stable crystal structure hackathon project
+alwaysApply: true
+---
+
+# Project overview
+
+This is a hackathon MVP for suggesting potentially stable crystal structures that may fall below the current Materials Project convex hull.
+
+Prioritize:
+- Fast, working pipelines over fully general infrastructure.
+- Reproducible scripts over notebook-only workflows.
+- Clear experiment logs and saved outputs.
+- Simple baselines before complex ML.
+
+The main source of truth for setup is `INSTALL.md`.
+The main source of truth for running the demo is `scripts/run_demo.sh`.
+
+Before making changes:
+1. Inspect the existing file structure.
+2. Prefer modifying existing scripts over creating new fragmented entrypoints.
+3. Keep changes small and testable.

@@ -1,0 +1,25 @@
+---
+description: Environment and installation standards for this repository
+alwaysApply: true
+---
+
+# Environment setup standards
+
+When adding dependencies:
+- Prefer `pyproject.toml` for Python packages unless the project already uses `environment.yml`.
+- Keep GPU-heavy dependencies optional where possible.
+- Do not assume CUDA is available unless explicitly stated.
+- Add every required environment variable to `.env.example`.
+- Update `INSTALL.md` whenever setup changes.
+
+When writing install commands:
+- Use copy-pasteable shell commands.
+- Include expected Python version.
+- Include a smoke test command after installation.
+
+Preferred setup flow:
+1. Create environment.
+2. Install dependencies.
+3. Download or prepare data.
+4. Run smoke test.
+5. Run demo.

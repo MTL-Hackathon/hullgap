@@ -1,0 +1,22 @@
+---
+description: Coding standards for Python files
+globs: ["*.py", "src/**/*.py", "scripts/**/*.py"]
+---
+
+# Python coding standards
+
+Use:
+- Clear function names.
+- Type hints for public functions.
+- Small functions with explicit inputs and outputs.
+- `pathlib.Path` instead of raw string paths.
+- `logging` instead of print statements, except in CLI/demo scripts.
+- Deterministic random seeds for experiments.
+
+Avoid:
+- Hidden global state.
+- Hard-coded absolute paths.
+- Silent exception handling.
+- Notebook-only logic that is not reproducible from the command line.
+
+Every new pipeline step should be runnable from a script or CLI command.

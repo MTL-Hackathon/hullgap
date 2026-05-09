@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""
+CLI: harvest energies and structures from finished VASP run directories.
+
+Intended after cluster jobs complete; does not require the VASP executable.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+from hullgap.dft.parse_vasp_outputs import parse_run_tree, write_energy_table
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Parse VASP outputs under a run tree into a CSV.")
+    p.add_argument("--run-dir", type=Path, required=True, help="Root directory containing candidate run folders.")
+    p.add_argument("--out", type=Path, required=True, help="Output CSV path.")
+    return p.parse_args()
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    args = _parse_args()
+    df = parse_run_tree(args.run_dir)
+    write_energy_table(df, args.out)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
