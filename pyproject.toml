@@ -19,5 +19,12 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+[project.optional-dependencies]
+mlip = [
+    "mace-torch>=0.3",
+    "ase>=3.22",
+    "torch>=1.12",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
