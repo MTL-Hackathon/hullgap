@@ -6,6 +6,25 @@
 - Git
 - Optional: CUDA-capable GPU for faster MLIP inference
 
+## Dependencies
+
+Core packages (installed automatically with `pip install -e .`):
+
+- `pymatgen>=2024.1` — crystal structure manipulation and analysis
+- `pandas>=2.0` — tabular data handling
+- `numpy>=1.24` — numerical arrays
+- `pyyaml>=6.0` — YAML config parsing
+- `tqdm>=4.65` — progress bars
+- `mp-api>=0.39` — Materials Project REST client
+- `matplotlib>=3.8` — plotting (convex hull diagrams, etc.)
+- `python-dotenv>=1.0` — load `.env` files
+
+Optional MLIP packages (install with `pip install -e ".[mlip]"`):
+
+- `mace-torch>=0.3` — MACE machine-learned interatomic potential
+- `ase>=3.22` — Atomic Simulation Environment (structure I/O, dynamics)
+- `torch>=1.12` — PyTorch backend for MACE
+
 ## Setup
 
 ```bash
@@ -17,6 +36,9 @@ source .venv/bin/activate
 
 pip install -U pip setuptools wheel
 pip install -e .
+
+# If you need MLIP relaxation:
+pip install -e ".[mlip]"
 ```
 
 On Windows, activate the virtual environment with `.venv\Scripts\activate` instead of `source .venv/bin/activate`.
