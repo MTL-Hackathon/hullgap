@@ -27,7 +27,7 @@ Optional packages:
 
 - `mace-torch>=0.3` — MACE-MP interatomic potential (install with `pip install -e ".[mace]"`)
 - `jupyterlab`, `ipykernel` — notebook support (install with `pip install -e ".[notebook]"`)
-- `streamlit>=1.30` — BROT web UI (install with `pip install -e ".[ui]"`)
+- `streamlit>=1.30`, `plotly>=5.18` — interactive crystal viewer & screening dashboard (install with `pip install -e ".[ui]"`)
 
 To install everything at once: `pip install -e ".[all]"`
 
@@ -104,18 +104,20 @@ After installation, pass `--model mace` to `scripts/relax_batch.py`.  If
 `mace-torch` is not installed, the script will print a clear error message and
 exit without crashing.
 
-## Streamlit UI — Project BROT (optional)
+## Streamlit crystal viewer (optional)
 
-The BROT (**B**eyond-DFT **R**apid **O**ptimization **T**oolkit) web UI provides
-an interactive interface for candidate generation and MACE validation.
+The interactive dashboard lets you visualize crystal structures, run MLIP
+screening with CHGNet, and launch DFT validation with Quantum ESPRESSO.
 
 ```bash
 pip install -e ".[ui]"
-streamlit run ui/app.py
+streamlit run app/crystal_viewer.py
 ```
 
-The app opens at `http://localhost:8501`. Select two elements, set a candidate
-count, and step through the generation → selection → MACE validation workflow.
+The app opens at `http://localhost:8501` with three tabs:
+- **Structure Viewer** — interactive 3D unit cell / supercell visualization
+- **MLIP Screening** — relax all prototypes with CHGNet and rank by formation energy
+- **DFT Validation** — select candidates and run Quantum ESPRESSO pw.x
 
 ## Quantum ESPRESSO (optional, for DFT validation)
 
