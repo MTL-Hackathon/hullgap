@@ -1,0 +1,38 @@
+# generated using pymatgen
+data_Ni2Bi
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   4.11489688
+_cell_length_b   6.89663682
+_cell_length_c   7.27709579
+_cell_angle_alpha   84.70344333
+_cell_angle_beta   89.95896673
+_cell_angle_gamma   89.98689537
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Ni2Bi
+_chemical_formula_sum   'Ni8 Bi4'
+_cell_volume   205.63450343
+_cell_formula_units_Z   4
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Ni  Ni0  1  0.81967658  0.09265101  0.61404330  1
+  Ni  Ni1  1  0.31969836  0.13603091  0.87533802  1
+  Ni  Ni2  1  0.81990659  0.92437857  0.92491311  1
+  Bi  Bi3  1  0.31944346  0.82694858  0.68762064  1
+  Ni  Ni4  1  0.81961328  0.59250957  0.11456278  1
+  Bi  Bi5  1  0.31955776  0.32697198  0.18725005  1
+  Ni  Ni6  1  0.31963146  0.80326456  0.06531693  1
+  Ni  Ni7  1  0.31958750  0.30430055  0.56532675  1
+  Ni  Ni8  1  0.31965065  0.63571602  0.37600759  1
+  Bi  Bi9  1  0.81967127  0.40238148  0.80255920  1
+  Ni  Ni10  1  0.81973606  0.42375034  0.42454529  1
+  Bi  Bi11  1  0.81981391  0.90215111  0.30246529  1

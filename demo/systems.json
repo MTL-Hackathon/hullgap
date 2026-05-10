@@ -1,0 +1,21 @@
+{
+  "systems": [
+    "Bi-Co",
+    "Bi-Co_50GPa",
+    "Bi-Fe",
+    "Bi-Mn",
+    "Bi-Ru",
+    "Co-Bi",
+    "Co-Sb",
+    "Co-Si",
+    "Li-O",
+    "Mo-Bi",
+    "N-Hf",
+    "N-Ta",
+    "N-Zr",
+    "Ni-Bi",
+    "Ni-Si",
+    "Ti-N",
+    "Ti-Si"
+  ]
+}

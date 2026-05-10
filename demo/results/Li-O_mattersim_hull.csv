@@ -1,0 +1,3 @@
+idx,formula,n_atoms,e_total_eV,e_per_atom_eV,fmax_eV_A,volume_A3,status,x_B,e_form_eV_atom,e_above_hull_eV_atom,on_hull,dynamically_stable,min_freq_THz,Cv_300K_J_K_mol,free_energy_300K_kJ_mol,bulk_modulus_GPa,shear_modulus_GPa,youngs_modulus_GPa,poisson_ratio,crystal_system
+0,Li2O2,4,-19.37804412841797,-4.844511032104492,0.0163169838488101,37.89919118934251,converged,0.5,-2.9567341804504395,0.0,True,,,,,-85.17322575680109,-49.39856679421961,0.0,0.0,Monoclinic
+1,Li2O2,4,-19.323101043701172,-4.830775260925293,0.0147621687501668,35.05447987887903,converged,0.5,-2.94299840927124,0.0137357711791992,True,,,,,-79.49366529131065,-41.48884514517603,0.0,0.0,Hexagonal
