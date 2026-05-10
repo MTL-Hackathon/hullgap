@@ -22,7 +22,7 @@ import { CrystalViewer } from "./crystal-viewer";
 export function BrotWorkspace() {
   const [elementA, setElementA] = useState("Co");
   const [elementB, setElementB] = useState("Bi");
-  const [step, setStep] = useState<Step>("candidates");
+  const [step, setStep] = useState<Step>("elements");
   const [candidates, setCandidates] = useState<CandidateResult[] | null>(null);
   const [maceResults, setMaceResults] = useState<MaceResult[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -33,6 +33,7 @@ export function BrotWorkspace() {
   const [crystalSystemFilter, setCrystalSystemFilter] = useState<Set<string>>(new Set());
 
   const [viewerVisited, setViewerVisited] = useState(false);
+  const [viewCandidate, setViewCandidate] = useState<CandidateResult | null>(null);
 
   const [assembled, setAssembled] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
@@ -41,7 +42,12 @@ export function BrotWorkspace() {
   const mainRef = useRef<HTMLElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
 
-  const stepIndex = step === "candidates" ? 0 : step === "validation" ? 1 : 2;
+  const stepIndex =
+    step === "elements" || step === "candidates"
+      ? 0
+      : step === "validation"
+        ? 1
+        : 2;
 
   const goBack = useCallback(() => {
     if (step === "validation") setStep("candidates");
@@ -116,13 +122,14 @@ export function BrotWorkspace() {
   }, [candidates, selected]);
 
   const reset = useCallback(() => {
-    setStep("candidates");
+    setStep("elements");
     setCandidates(null);
     setMaceResults(null);
     setSelected(new Set());
     setCrystalSystemFilter(new Set());
     setError(null);
     setViewerVisited(false);
+    setViewCandidate(null);
   }, []);
 
   const toggleSelect = useCallback((index: number) => {
@@ -273,18 +280,19 @@ export function BrotWorkspace() {
       <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
         <StepTracker
           step={step}
-          stepIndex={stepIndex}
+          pinnedStep="elements"
+          canOpenElements
           canOpenCandidates={Boolean(candidates)}
           canOpenValidation={Boolean(maceResults)}
-          canOpenViewer={viewerVisited}
+          onOpenElements={() => {
+            setStep("elements");
+            scrollToPeriodicTable();
+          }}
           onOpenCandidates={() => {
             if (candidates) setStep("candidates");
           }}
           onOpenValidation={() => {
             if (maceResults) setStep("validation");
-          }}
-          onOpenViewer={() => {
-            if (viewerVisited) setStep("viewer");
           }}
         />
       </div>
@@ -297,6 +305,26 @@ export function BrotWorkspace() {
       {/* Main workspace — only shown once candidates exist */}
       {candidates && (
       <main ref={mainRef} className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <div className="mb-6">
+          <StepTracker
+            step={step}
+            pinnedStep="validation"
+            canOpenElements
+            canOpenCandidates={Boolean(candidates)}
+            canOpenValidation={Boolean(maceResults)}
+            onOpenElements={() => {
+              setStep("elements");
+              scrollToPeriodicTable();
+            }}
+            onOpenCandidates={() => {
+              if (candidates) setStep("candidates");
+            }}
+            onOpenValidation={() => {
+              if (maceResults) setStep("validation");
+            }}
+          />
+        </div>
+
         <div className="relative">
           {step !== "candidates" && (
             <button
@@ -487,8 +515,13 @@ export function BrotWorkspace() {
                     <button
                       type="button"
                       onClick={() => {
-                        setViewerVisited(true);
-                        setStep("viewer");
+                        const first =
+                          maceResults.find((r) => r.mace_stable) ?? maceResults[0];
+                        if (first) {
+                          setViewCandidate(first);
+                          setViewerVisited(true);
+                          setStep("viewer");
+                        }
                       }}
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--accent)]/35 hover:bg-[var(--accent-dim)]"
                     >
@@ -510,8 +543,12 @@ export function BrotWorkspace() {
               ref={(el) => { slideRefs.current[2] = el; }}
               className="w-full min-w-full shrink-0"
             >
-              {viewerVisited && (
-                <CrystalViewer elementA={elementA} elementB={elementB} />
+              {viewerVisited && viewCandidate && (
+                <CrystalViewer
+                  elementA={elementA}
+                  elementB={elementB}
+                  candidate={viewCandidate}
+                />
               )}
             </div>
           </div>
