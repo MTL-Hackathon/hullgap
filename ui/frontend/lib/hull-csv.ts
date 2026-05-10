@@ -14,6 +14,24 @@ export function parseCSV(text: string): Record<string, string>[] {
   });
 }
 
+/** Rows from `candidates_curated.csv` (first column `system`). */
+export function curatedDemoRowsToCandidates(
+  rows: Record<string, string>[],
+  elementA: string,
+  elementB: string,
+): CandidateResult[] | null {
+  const s1 = `${elementA}-${elementB}`;
+  const s2 = `${elementB}-${elementA}`;
+  const matched = rows.filter((r) => r.system === s1 || r.system === s2);
+  if (matched.length === 0) return null;
+  const system = matched[0].system as string;
+  const hullRows = matched.map((r) => {
+    const { system: _s, ...rest } = r;
+    return rest;
+  });
+  return hullCsvRowsToCandidates(system, hullRows);
+}
+
 export function hullCsvRowsToCandidates(
   system: string,
   rows: Record<string, string>[],

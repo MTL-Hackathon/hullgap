@@ -1,5 +1,6 @@
 import { parseCif } from "./cif";
 import {
+  curatedDemoRowsToCandidates,
   hullCsvRowsToCandidates,
   parseCSV,
   predictionsCsvRowsToCandidates,
@@ -8,6 +9,21 @@ import { isStaticExport, withBasePath } from "./site";
 import type { CandidateResult, MaceResult, MpPhase, StructureData } from "./types";
 
 let cifIndexPromise: Promise<Record<string, Record<string, string>>> | null = null;
+let curatedRowsPromise: Promise<Record<string, string>[] | null> | null = null;
+
+function loadCuratedDemoRows(): Promise<Record<string, string>[] | null> {
+  if (!curatedRowsPromise) {
+    curatedRowsPromise = fetch(withBasePath("/demo/candidates_curated.csv")).then(
+      async (r) => {
+        if (!r.ok) return null;
+        const text = await r.text();
+        const rows = parseCSV(text);
+        return rows.length ? rows : null;
+      },
+    );
+  }
+  return curatedRowsPromise;
+}
 
 function loadCifIndex(): Promise<Record<string, Record<string, string>>> {
   if (!cifIndexPromise) {
@@ -55,6 +71,13 @@ export async function generateCandidates(
   elementB: string,
   nCandidates: number
 ): Promise<CandidateResult[]> {
+  const fromCurated = await loadCuratedDemoRows().then((rows) =>
+    rows ? curatedDemoRowsToCandidates(rows, elementA, elementB) : null,
+  );
+  if (fromCurated?.length) {
+    return nCandidates > 0 ? fromCurated.slice(0, nCandidates) : fromCurated;
+  }
+
   if (isStaticExport) {
     const local = await loadStaticHullCandidates(elementA, elementB);
     if (local) {

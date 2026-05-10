@@ -65,6 +65,10 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    curated_src = ROOT / "data" / "demo" / "candidates_curated.csv"
+    if curated_src.is_file() and curated_src.stat().st_size > 0:
+        shutil.copy2(curated_src, DEMO_DST / "candidates_curated.csv")
+
     print(f"sync_static_demo_assets: {len(systems)} hull CSVs, {len(cif_index)} systems with CIFs -> {DEMO_DST}")
 
 

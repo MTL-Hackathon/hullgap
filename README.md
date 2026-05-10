@@ -24,7 +24,7 @@ echo "MP_API_KEY=…" > .env       # Materials Project API
 
 **Pipeline (example):** `python scripts/run_mattergen_mattersim.py --element-a Co --element-b Bi --n-candidates 100` → `data/mattergen/Co-Bi/`, `data/results/Co-Bi_mattersim_hull.csv`.
 
-**Pages:** Settings → Pages → deploy from branch **`gh-pages`** / `/`. Workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) builds and pushes that branch.
+**Pages:** Settings → Pages → deploy from branch **`gh-pages`** / `/`. Workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) runs `scripts/export_curated_demo_candidates.py` (≤20 MatterSim hull rows per system with `data/mattergen/.../relaxed/`), then syncs assets. The UI prefers `public/demo/candidates_curated.csv` over per-system hull APIs when that file is present (`python scripts/export_curated_demo_candidates.py` locally after changing hull data).
 
 ## Functionality
 

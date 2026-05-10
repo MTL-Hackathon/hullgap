@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import {
+  curatedDemoRowsToCandidates,
   hullCsvRowsToCandidates,
   parseCSV,
   predictionsCsvRowsToCandidates,
@@ -12,6 +13,21 @@ export const dynamic = "force-static";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 const DATA_DIR = join(process.cwd(), "..", "..", "data", "results");
+const DATA_DEMO = join(process.cwd(), "..", "..", "data", "demo");
+
+async function loadCuratedCandidates(elementA: string, elementB: string) {
+  try {
+    const text = await readFile(
+      join(DATA_DEMO, "candidates_curated.csv"),
+      "utf-8",
+    );
+    const rows = parseCSV(text);
+    if (!rows.length) return null;
+    return curatedDemoRowsToCandidates(rows, elementA, elementB);
+  } catch {
+    return null;
+  }
+}
 
 async function loadPredictionsCSV(elementA: string, elementB: string) {
   const isCoBi =
@@ -57,8 +73,9 @@ export async function POST(request: NextRequest) {
     element_b: string;
   };
 
-  // Prefer local CSV data when available
+  // Prefer curated demo slice (≤20 rows / system), then other local CSVs
   const csvCandidates =
+    (await loadCuratedCandidates(element_a, element_b)) ??
     (await loadPredictionsCSV(element_a, element_b)) ??
     (await loadHullCSV(element_a, element_b));
 

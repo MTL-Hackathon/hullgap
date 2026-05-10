@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:gh-pages": "python3 ../../scripts/sync_static_demo_assets.py && next build",
+    "export-curated": "python3 ../../scripts/export_curated_demo_candidates.py",
     "start": "next start",
     "lint": "eslint"
   },

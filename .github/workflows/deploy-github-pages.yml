@@ -28,6 +28,9 @@ jobs:
           cache: npm
           cache-dependency-path: ui/frontend/package-lock.json
 
+      - name: Curated demo CSV (max 20 hull rows per MatterGen+MatterSim system)
+        run: python3 scripts/export_curated_demo_candidates.py
+
       - name: Sync demo CSVs and CIFs into frontend public/
         run: python3 scripts/sync_static_demo_assets.py
 
