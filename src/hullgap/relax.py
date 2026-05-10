@@ -32,6 +32,9 @@ from hullgap.calculators import get_calculator
 
 logger = logging.getLogger(__name__)
 
+# 1 GPa = 1/160.21766208 eV/Å³
+_GPa_TO_EV_A3 = 1.0 / 160.21766208
+
 
 # ---------------------------------------------------------------------------
 # Per-step recorder
@@ -137,6 +140,7 @@ def relax_structure(
     fmax: float = 0.05,
     max_steps: int = 300,
     relax_cell: bool = True,
+    pressure_GPa: float = 0.0,
     save_trajectory: bool = False,
     trajectory_dir: str | None = None,
     save_step_log: bool = False,
@@ -158,6 +162,10 @@ def relax_structure(
         Maximum optimiser steps.
     relax_cell
         Whether to relax the unit-cell (volume + shape) alongside positions.
+    pressure_GPa
+        External hydrostatic pressure in GPa (default 0).  Passed as
+        ``scalar_pressure`` to ``FrechetCellFilter`` (converted to eV/Å³).
+        The result dict includes ``enthalpy_per_atom_eV = (E + PV) / N``.
     save_trajectory
         If *True*, write ``.traj`` and ``.extxyz`` trajectory files.
     trajectory_dir
@@ -211,8 +219,9 @@ def relax_structure(
         calc = _calculator if _calculator is not None else get_calculator(model)
         atoms.calc = calc
 
+        scalar_pressure = pressure_GPa * _GPa_TO_EV_A3
         if relax_cell:
-            opt_target = FrechetCellFilter(atoms)
+            opt_target = FrechetCellFilter(atoms, scalar_pressure=scalar_pressure)
         else:
             opt_target = atoms
 
@@ -248,6 +257,7 @@ def relax_structure(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         pmg_struct.to(filename=str(output_path))
 
+        enthalpy = float(energy) + scalar_pressure * volume
         result.update(
             {
                 "formula": pmg_struct.composition.reduced_formula,
@@ -255,6 +265,8 @@ def relax_structure(
                 "relaxed_file": str(output_path),
                 "energy_total_eV": float(energy),
                 "energy_per_atom_eV": float(energy) / n_atoms,
+                "enthalpy_per_atom_eV": enthalpy / n_atoms,
+                "pressure_GPa": pressure_GPa,
                 "max_force_eV_A": max_force,
                 "volume_per_atom": volume / n_atoms,
                 "n_steps": n_steps,

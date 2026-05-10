@@ -49,6 +49,8 @@ log = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+_GPa_TO_EV_A3 = 1.0 / 160.21766208
+
 
 # ── CLI ──────────────────────────────────────────────────────────────
 
@@ -60,6 +62,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-candidates", type=int, default=32)
     p.add_argument("--guidance", type=float, default=2.0)
     p.add_argument("--e-above-hull-target", type=float, default=0.0)
+    p.add_argument("--pressure-gpa", type=float, default=0.0,
+                   help="External hydrostatic pressure in GPa (default: 0). "
+                        "Hull is built on formation enthalpy H=E+PV at this pressure.")
     p.add_argument("--skip-properties", action="store_true",
                    help="Skip phonon and elastic property calculations")
     p.add_argument("--n-property-candidates", type=int, default=5,
@@ -118,61 +123,75 @@ def step1_generate(system: str, n: int, guidance: float,
 
 
 def step2_references(elements: list[str], calc,
-                     cache_path: Path) -> dict[str, float]:
-    """Compute or load cached per-atom energies for pure elements."""
-    log.info("=== Step 2: Elemental reference energies ===")
+                     cache_path: Path,
+                     pressure_GPa: float = 0.0) -> dict[str, float]:
+    """Compute or load cached per-atom enthalpies for pure elements."""
+    log.info("=== Step 2: Elemental reference enthalpies @ %.2f GPa ===", pressure_GPa)
     refs = get_elemental_references(
         elements=elements,
         calculator=calc,
         cache_path=cache_path,
+        pressure_GPa=pressure_GPa,
     )
-    for el, e in refs.items():
-        log.info("  %s: %.6f eV/atom", el, e)
+    for el, h in refs.items():
+        log.info("  %s: %.6f eV/atom", el, h)
     return refs
 
 
 # ── Step 3: Relax candidates with MatterSim ──────────────────────────
 
 
-def step3_relax(structures, calc) -> tuple[pd.DataFrame, list]:
+def step3_relax(structures, calc,
+                pressure_GPa: float = 0.0,
+                target_elements: set[str] | None = None) -> tuple[pd.DataFrame, list]:
     """Relax all candidates and return (results DataFrame, relaxed_structures).
 
-    The returned ``relaxed_structures`` list has the same length and ordering
-    as the input ``structures``; entries for failed relaxations fall back to
-    the original (un-relaxed) structure so downstream indexing stays stable.
-    The CSV stats (volume, energy, fmax) are computed from the *relaxed*
-    geometry, so the saved CIFs MUST be the relaxed ones — otherwise the
-    crystal_system / volume / energy columns disagree with the structure on
-    disk.
+    The returned ``relaxed_structures`` list contains post-relaxation pymatgen
+    Structures; failed entries fall back to the original geometry so downstream
+    indexing stays stable.  Structures with elements outside *target_elements*
+    are skipped entirely (no reference energy needed for the foreign element).
     """
-    log.info("=== Step 3: MatterSim relaxation ===")
+    log.info("=== Step 3: MatterSim relaxation @ %.2f GPa ===", pressure_GPa)
+    scalar_pressure = pressure_GPa * _GPa_TO_EV_A3
     results = []
     relaxed_structures: list = []
     for i, struct in enumerate(structures):
+        if target_elements is not None:
+            present = {str(el) for el in struct.composition.elements}
+            foreign = present - target_elements
+            if foreign:
+                log.warning("  [%d] %-10s  skipped — foreign elements: %s",
+                            i, struct.composition.reduced_formula, foreign)
+                continue
+
         atoms = AseAtomsAdaptor.get_atoms(struct)
         atoms.calc = calc
 
         try:
-            opt_target = FrechetCellFilter(atoms)
+            opt_target = FrechetCellFilter(atoms, scalar_pressure=scalar_pressure)
             opt = LBFGS(opt_target, logfile=None)
             opt.run(fmax=0.02, steps=500)
 
             e_total = float(atoms.get_potential_energy())
+            volume = float(atoms.get_volume())
             n_atoms = len(atoms)
             fmax = float(np.max(np.linalg.norm(atoms.get_forces(), axis=1)))
+            enthalpy = e_total + scalar_pressure * volume
 
             status = "converged" if fmax < 0.02 else "max_steps"
-            log.info("  [%d] %-10s  E=%.4f eV/atom  fmax=%.4f  %s",
+            log.info("  [%d] %-10s  H=%.4f eV/atom  fmax=%.4f  %s",
                      i, struct.composition.reduced_formula,
-                     e_total / n_atoms, fmax, status)
+                     enthalpy / n_atoms, fmax, status)
             results.append({
                 "idx": i,
                 "formula": struct.composition.reduced_formula,
                 "n_atoms": n_atoms,
                 "e_total_eV": e_total,
                 "e_per_atom_eV": e_total / n_atoms,
+                "enthalpy_eV": enthalpy,
+                "enthalpy_per_atom_eV": enthalpy / n_atoms,
                 "fmax_eV_A": fmax,
-                "volume_A3": atoms.get_volume(),
+                "volume_A3": volume,
                 "status": status,
             })
             # Capture the post-relaxation geometry as a pymatgen Structure so
@@ -186,6 +205,8 @@ def step3_relax(structures, calc) -> tuple[pd.DataFrame, list]:
                 "n_atoms": struct.num_sites,
                 "e_total_eV": np.nan,
                 "e_per_atom_eV": np.nan,
+                "enthalpy_eV": np.nan,
+                "enthalpy_per_atom_eV": np.nan,
                 "fmax_eV_A": np.nan,
                 "volume_A3": np.nan,
                 "status": f"failed: {exc}",
@@ -207,11 +228,17 @@ def step3_relax(structures, calc) -> tuple[pd.DataFrame, list]:
 
 
 def step4_hull(df: pd.DataFrame, refs: dict[str, float],
-               element_b: str) -> tuple[pd.DataFrame, np.ndarray]:
-    """Score candidates and return (scored_df, hull_vertices)."""
-    log.info("=== Step 4: Formation energy + convex hull ===")
+               element_b: str,
+               pressure_GPa: float = 0.0) -> tuple[pd.DataFrame, np.ndarray]:
+    """Score candidates and return (scored_df, hull_vertices).
 
-    df_ok = df[~df.e_total_eV.isna()].copy()
+    At pressure_GPa > 0 the hull is built on formation enthalpy ΔH/atom
+    (using the ``enthalpy_eV`` column); at 0 GPa it falls back to total energy.
+    """
+    log.info("=== Step 4: Formation enthalpy + convex hull @ %.2f GPa ===", pressure_GPa)
+
+    energy_col = "enthalpy_eV" if pressure_GPa > 0.0 else "e_total_eV"
+    df_ok = df[~df[energy_col].isna()].copy()
     if df_ok.empty:
         log.error("No successfully relaxed structures!")
         return df_ok, np.empty((0, 2))
@@ -224,7 +251,7 @@ def step4_hull(df: pd.DataFrame, refs: dict[str, float],
         comp = Composition(row["formula"]) * (
             row["n_atoms"] / Composition(row["formula"]).num_atoms
         )
-        return formation_energy_per_atom(row["e_total_eV"], comp, refs)
+        return formation_energy_per_atom(row[energy_col], comp, refs)
 
     df_ok["e_form_eV_atom"] = df_ok.apply(_calc_eform, axis=1)
 
@@ -249,7 +276,8 @@ def step4_hull(df: pd.DataFrame, refs: dict[str, float],
 
 
 def step5_plot(df_ok: pd.DataFrame, hull: np.ndarray,
-               element_a: str, element_b: str, save_path: Path) -> None:
+               element_a: str, element_b: str, save_path: Path,
+               pressure_GPa: float = 0.0) -> None:
     """Draw the convex hull diagram and save as PNG."""
     log.info("=== Step 5: Plot convex hull ===")
 
@@ -307,10 +335,14 @@ def step5_plot(df_ok: pd.DataFrame, hull: np.ndarray,
                 ls=":", lw=0.7, color="#94a3b8", alpha=0.5, zorder=2)
 
     ax.axhline(0, color="#cbd5e1", lw=1.0, ls="--", zorder=3)
+    pressure_label = f"  |  P = {pressure_GPa:.1f} GPa" if pressure_GPa > 0 else ""
+    y_label = "Formation enthalpy (eV/atom)" if pressure_GPa > 0 else "Formation energy (eV/atom)"
     ax.set_xlabel(f"x({element_b})  \u2014  mole fraction of {element_b}", fontsize=12)
-    ax.set_ylabel("Formation energy (eV/atom)", fontsize=12)
-    ax.set_title(f"{element_a}\u2013{element_b}  convex hull   (MatterGen + MatterSim)",
-                 fontsize=14, fontweight="bold")
+    ax.set_ylabel(y_label, fontsize=12)
+    ax.set_title(
+        f"{element_a}\u2013{element_b}  convex hull   (MatterGen + MatterSim){pressure_label}",
+        fontsize=14, fontweight="bold",
+    )
     ax.set_xlim(-0.05, 1.05)
     y_min = min(df_ok.e_form_eV_atom.min(), hull_sorted[:, 1].min())
     ax.set_ylim(y_min * 1.25, max(0.15, df_ok.e_form_eV_atom.max() * 1.1 + 0.05))
@@ -508,14 +540,20 @@ def step9_property_plot(df_ok: pd.DataFrame, element_a: str,
 def main():
     args = parse_args()
     system = f"{args.element_a}-{args.element_b}"
+    pressure_GPa: float = args.pressure_gpa
     device = "cuda" if torch.cuda.is_available() else "cpu"
     log.info("Device: %s  |  torch: %s", device, torch.__version__)
     if device == "cuda":
         log.info("GPU:    %s", torch.cuda.get_device_name(0))
+    if pressure_GPa > 0:
+        log.info("Pressure: %.2f GPa  (hull built on formation enthalpy H=E+PV)", pressure_GPa)
 
+    # Pressure-aware output names: e.g. "Li-O_10GPa_mattersim_hull.csv"
+    p_suffix = f"_{pressure_GPa:.0f}GPa" if pressure_GPa > 0 else ""
     output_dir = PROJECT_ROOT / "data" / "mattergen" / system
     ref_cache = PROJECT_ROOT / "data" / "mattersim_references.yaml"
-    results_csv = PROJECT_ROOT / "data" / "results" / f"{system}_mattersim_hull.csv"
+    results_csv = (PROJECT_ROOT / "data" / "results"
+                   / f"{system}{p_suffix}_mattersim_hull.csv")
     plot_path = results_csv.with_suffix(".png")
     output_dir.mkdir(parents=True, exist_ok=True)
     results_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -534,16 +572,19 @@ def main():
         elements=[args.element_a, args.element_b],
         calc=calc,
         cache_path=ref_cache,
+        pressure_GPa=pressure_GPa,
     )
 
-    df, relaxed_structures = step3_relax(structures, calc)
+    df, relaxed_structures = step3_relax(structures, calc,
+                                          pressure_GPa=pressure_GPa,
+                                          target_elements={args.element_a, args.element_b})
 
-    df_ok, hull = step4_hull(df, refs, args.element_b)
+    df_ok, hull = step4_hull(df, refs, args.element_b, pressure_GPa=pressure_GPa)
 
     if not df_ok.empty:
-        step5_plot(df_ok, hull, args.element_a, args.element_b, plot_path)
-        # All downstream steps must use the *relaxed* structures so the CIFs
-        # on disk match the CSV's volume / energy / crystal_system columns.
+        step5_plot(df_ok, hull, args.element_a, args.element_b, plot_path,
+                   pressure_GPa=pressure_GPa)
+        # Use relaxed structures so CIFs on disk match the CSV stats.
         step6_save(df_ok, relaxed_structures, results_csv, output_dir, system)
 
         if not args.skip_properties:
@@ -552,7 +593,7 @@ def main():
             df_ok = step8_elastic(df_ok, relaxed_structures, calc, n_top=n_top)
 
             prop_plot_path = results_csv.with_name(
-                f"{system}_properties.png"
+                f"{system}{p_suffix}_properties.png"
             )
             step9_property_plot(df_ok, args.element_a, args.element_b,
                                prop_plot_path)

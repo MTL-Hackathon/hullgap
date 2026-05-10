@@ -20,6 +20,8 @@ from ase.optimize import LBFGS
 
 logger = logging.getLogger(__name__)
 
+_GPa_TO_EV_A3 = 1.0 / 160.21766208
+
 GROUND_STATE_STRUCTURES: dict[str, dict[str, Any]] = {
     "Li": {"name": "Li", "crystalstructure": "bcc", "a": 3.49},
     "Na": {"name": "Na", "crystalstructure": "bcc", "a": 4.23},
@@ -99,30 +101,38 @@ def _build_element_atoms(symbol: str) -> Atoms:
         ) from exc
 
 
-def _relax_and_get_energy(
+def _relax_and_get_enthalpy_per_atom(
     atoms: Atoms,
     calculator: Any,
     fmax: float = 0.01,
     max_steps: int = 500,
+    pressure_GPa: float = 0.0,
 ) -> float:
-    """Relax *atoms* with *calculator* and return energy per atom."""
+    """Relax *atoms* at *pressure_GPa* and return enthalpy (E+PV) per atom."""
     atoms = atoms.copy()
     atoms.calc = calculator
-    opt_target = FrechetCellFilter(atoms)
+    scalar_pressure = pressure_GPa * _GPa_TO_EV_A3
+    opt_target = FrechetCellFilter(atoms, scalar_pressure=scalar_pressure)
     opt = LBFGS(opt_target, logfile=None)
     opt.run(fmax=fmax, steps=max_steps)
-    return float(atoms.get_potential_energy()) / len(atoms)
+    energy = float(atoms.get_potential_energy())
+    volume = float(atoms.get_volume())
+    return (energy + scalar_pressure * volume) / len(atoms)
 
 
 def get_elemental_references(
     elements: list[str],
     calculator: Any,
     cache_path: Path | None = None,
+    pressure_GPa: float = 0.0,
 ) -> dict[str, float]:
-    """Return ``{element: energy_per_atom}`` for each element.
+    """Return ``{element: enthalpy_per_atom}`` for each element at *pressure_GPa*.
 
-    If *cache_path* points to an existing YAML file, cached values are
-    loaded first; only missing elements are relaxed and appended.
+    Values are enthalpies H = (E + PV) / N so they can be used directly as
+    chemical potentials when building the convex hull at finite pressure.
+
+    Cache keys are ``"{el}@{P:.2f}GPa"`` for P > 0 and ``"{el}"`` for 0 GPa
+    (backward-compatible with existing caches).
     """
     cached: dict[str, float] = {}
     if cache_path is not None and cache_path.exists():
@@ -130,20 +140,28 @@ def get_elemental_references(
             raw = yaml.safe_load(f) or {}
         cached = {str(k): float(v) for k, v in raw.items() if isinstance(v, (int, float))}
 
+    def _cache_key(el: str) -> str:
+        return el if pressure_GPa == 0.0 else f"{el}@{pressure_GPa:.2f}GPa"
+
     refs: dict[str, float] = {}
     updated = False
     for el in elements:
-        if el in cached:
-            refs[el] = cached[el]
-            logger.info("Reference %s: %.6f eV/atom (cached)", el, refs[el])
+        key = _cache_key(el)
+        if key in cached:
+            refs[el] = cached[key]
+            logger.info("Reference %s @ %.2f GPa: %.6f eV/atom (cached)",
+                        el, pressure_GPa, refs[el])
             continue
-        logger.info("Computing reference energy for %s …", el)
+        logger.info("Computing reference enthalpy for %s @ %.2f GPa …",
+                    el, pressure_GPa)
         atoms = _build_element_atoms(el)
-        e_per_atom = _relax_and_get_energy(atoms, calculator)
-        refs[el] = e_per_atom
-        cached[el] = e_per_atom
+        h_per_atom = _relax_and_get_enthalpy_per_atom(
+            atoms, calculator, pressure_GPa=pressure_GPa
+        )
+        refs[el] = h_per_atom
+        cached[key] = h_per_atom
         updated = True
-        logger.info("Reference %s: %.6f eV/atom", el, e_per_atom)
+        logger.info("Reference %s @ %.2f GPa: %.6f eV/atom", el, pressure_GPa, h_per_atom)
 
     if updated and cache_path is not None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
