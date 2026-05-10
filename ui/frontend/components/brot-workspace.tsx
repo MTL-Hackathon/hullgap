@@ -11,6 +11,7 @@ import { ArrowLeft, Loader2, Search, Download, FlaskConical, Eye } from "lucide-
 import { generateCandidates, validateWithMace } from "@/lib/api-client";
 import type { CandidateResult, MaceResult } from "@/lib/types";
 import { HeroSection } from "./hero-section";
+import { ElementMap } from "./element-map";
 import { StepTracker, type Step } from "./step-tracker";
 import { CandidateTable } from "./candidate-table";
 import { ResultsTable } from "./results-table";
@@ -258,6 +259,9 @@ export function BrotWorkspace() {
 
       {/* Hero */}
       <HeroSection onGetStarted={scrollToMain} />
+
+      {/* Element map */}
+      <ElementMap />
 
       {/* Main workspace */}
       <main ref={mainRef} className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6">
