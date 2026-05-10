@@ -1,0 +1,34 @@
+# generated using pymatgen
+data_Ti3N5
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   3.05647210
+_cell_length_b   4.05505208
+_cell_length_c   7.29623461
+_cell_angle_alpha   89.90142237
+_cell_angle_beta   89.96678730
+_cell_angle_gamma   90.00548715
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Ti3N5
+_chemical_formula_sum   'Ti3 N5'
+_cell_volume   90.43050265
+_cell_formula_units_Z   1
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Ti  Ti0  1  0.71066141  0.27220336  0.51604837  1
+  Ti  Ti1  1  0.21017116  0.77239561  0.29359761  1
+  Ti  Ti2  1  0.21090025  0.77271861  0.73575699  1
+  N  N3  1  0.21099590  0.27159959  0.70181662  1
+  N  N4  1  0.20978747  0.27291998  0.32958323  1
+  N  N5  1  0.71058446  0.77281821  0.51555866  1
+  N  N6  1  0.71047622  0.77326125  0.10284894  1
+  N  N7  1  0.71077919  0.77173680  0.92610741  1

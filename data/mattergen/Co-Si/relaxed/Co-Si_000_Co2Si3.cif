@@ -1,0 +1,36 @@
+# generated using pymatgen
+data_Co2Si3
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   4.45378487
+_cell_length_b   5.19481290
+_cell_length_c   5.90081882
+_cell_angle_alpha   89.52826187
+_cell_angle_beta   89.52731239
+_cell_angle_gamma   65.22930863
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Co2Si3
+_chemical_formula_sum   'Co4 Si6'
+_cell_volume   123.95744670
+_cell_formula_units_Z   2
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Si  Si0  1  0.12292758  0.68261510  0.09182250  1
+  Si  Si1  1  0.62327856  0.18252656  0.59293103  1
+  Co  Co2  1  0.75385702  0.76448786  0.79300147  1
+  Si  Si3  1  0.70262766  0.39389068  0.00798316  1
+  Co  Co4  1  0.25355542  0.26502419  0.89137393  1
+  Co  Co5  1  0.99102771  0.09899576  0.29304728  1
+  Co  Co6  1  0.49075651  0.59960383  0.39127409  1
+  Si  Si7  1  0.04141944  0.46873441  0.50796282  1
+  Si  Si8  1  0.54195416  0.97037017  0.17622359  1
+  Si  Si9  1  0.20401759  0.89532292  0.67606395  1
