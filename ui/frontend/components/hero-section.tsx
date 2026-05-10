@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDown } from "lucide-react";
+import { withBasePath } from "@/lib/site";
 
 interface Props {
   onGetStarted: () => void;
@@ -14,7 +15,7 @@ export function HeroSection({ onGetStarted }: Props) {
       <div className="relative z-10 flex flex-col items-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/mf-icon.png"
+          src={withBasePath("/mf-icon.png")}
           alt="Mf"
           className="mb-8 h-28 w-28 rounded-2xl object-contain sm:h-36 sm:w-36"
         />

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { ArrowLeft, Loader2, Search, Download, Eye } from "lucide-react";
 import { generateCandidates, validateWithMace, fetchMpPhases } from "@/lib/api-client";
+import { isStaticExport, withBasePath } from "@/lib/site";
 import type { CandidateResult, MaceResult, MpPhase } from "@/lib/types";
 import { HeroSection } from "./hero-section";
 import { ElementMap } from "./element-map";
@@ -338,13 +339,19 @@ export function Workspace() {
             <div className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/logo.png"
+                src={withBasePath("/logo.png")}
                 alt="Matter of Fact"
                 className="h-[40px] object-contain"
               />
             </div>
           </div>
         </div>
+        {isStaticExport && (
+          <div className="border-t border-amber-100 bg-amber-50/90 px-4 py-2 text-center text-xs text-amber-900 sm:text-sm">
+            GitHub Pages demo: precomputed hull CSVs and relaxed CIFs only. Materials Project overlays
+            and second-step validation require cloning this repository and running the app locally (see README).
+          </div>
+        )}
       </header>
 
       {/* Floating elements overlay */}
@@ -473,7 +480,9 @@ export function Workspace() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-sm font-semibold tracking-[-0.01em] text-[var(--foreground)]">
-                          Select candidates for DFT validation
+                          {isStaticExport
+                            ? "Candidate selection (validation disabled on static demo)"
+                            : "Select candidates for DFT validation"}
                         </h3>
                         <p className="mt-1 text-xs text-slate-400">
                           {selected.size} of {candidates.length} selected
@@ -533,7 +542,12 @@ export function Workspace() {
                     <button
                       type="button"
                       onClick={runValidation}
-                      disabled={selected.size === 0 || valLoading}
+                      disabled={isStaticExport || selected.size === 0 || valLoading}
+                      title={
+                        isStaticExport
+                          ? "Validation runs only in the full local app"
+                          : undefined
+                      }
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/20 transition hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {valLoading ? (
@@ -541,7 +555,9 @@ export function Workspace() {
                       ) : (
                         <Search className="h-4 w-4" aria-hidden />
                       )}
-                      Validate {selected.size} selected with DFT
+                      {isStaticExport
+                        ? "Validation (local app only)"
+                        : `Validate ${selected.size} selected with DFT`}
                     </button>
                   </div>
                 </div>

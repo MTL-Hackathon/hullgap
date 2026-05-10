@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { isStaticExport } from "@/lib/site";
 import { StepTracker } from "./step-tracker";
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -1003,6 +1004,10 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     mpAbortRef.current = ctrl;
     setMpPhases(null);
     setMpError(null);
+    if (isStaticExport) {
+      setMpLoading(false);
+      return;
+    }
     setMpLoading(true);
     try {
       const res = await fetch(
@@ -1031,6 +1036,9 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     const ctrl = new AbortController();
     binaryAbortRef.current = ctrl;
     binaryCountsRef.current = {};
+    if (isStaticExport) {
+      return;
+    }
     try {
       const res = await fetch(
         `/api/mp-binary-counts?el=${encodeURIComponent(symbol)}`,

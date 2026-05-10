@@ -55,6 +55,23 @@ npm run dev
 
 Open http://localhost:3000.
 
+### GitHub Pages (static demo)
+
+The workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) exports the Next.js UI as static HTML, bundles hull CSVs and relaxed CIFs from `data/results` and `data/mattergen`, and deploys to GitHub Pages on pushes to `main`. Enable it under **Settings → Pages → Build and deployment → GitHub Actions**.
+
+Project sites use base path `/<repository-name>` automatically. For a repository named `username.github.io`, the workflow sets an empty base path (site served at the domain root).
+
+Local static build:
+
+```bash
+python scripts/sync_static_demo_assets.py
+cd ui/frontend
+NEXT_PUBLIC_STATIC_EXPORT=true NEXT_PUBLIC_BASE_PATH=/your-repo-name npm run build
+# output: ui/frontend/out/
+```
+
+The static demo does not include Materials Project overlays or MACE validation (those need server-side routes or local API keys).
+
 ### Run the pipeline from the CLI
 
 End-to-end MatterGen → MatterSim → hull for one binary:
