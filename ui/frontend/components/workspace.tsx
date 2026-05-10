@@ -19,7 +19,7 @@ import { ResultsTable } from "./results-table";
 import { HullChart } from "./hull-chart";
 import { CrystalViewer } from "./crystal-viewer";
 
-export function BrotWorkspace() {
+export function Workspace() {
   const [elementA, setElementA] = useState("Co");
   const [elementB, setElementB] = useState("Bi");
   const [step, setStep] = useState<Step>("candidates");
@@ -36,7 +36,6 @@ export function BrotWorkspace() {
 
   const [assembled, setAssembled] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
-  const [landed, setLanded] = useState(false);
 
   const mainRef = useRef<HTMLElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
@@ -64,10 +63,6 @@ export function BrotWorkspace() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [assembled]);
-
-  const handleLanded = useCallback(() => {
-    setLanded(true);
-  }, []);
 
   const handleOverlayComplete = useCallback(() => {
     setShowOverlay(false);
@@ -244,7 +239,12 @@ export function BrotWorkspace() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="flex items-center justify-between py-3">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold tracking-[-0.02em] text-[var(--foreground)]">Matter of Fact</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="Matter of Fact"
+                className="h-[28px] object-contain"
+              />
             </div>
           </div>
         </div>
@@ -254,7 +254,6 @@ export function BrotWorkspace() {
       {showOverlay && (
         <FloatingElements
           assembled={assembled}
-          onLanded={handleLanded}
           onComplete={handleOverlayComplete}
         />
       )}
@@ -265,8 +264,8 @@ export function BrotWorkspace() {
       {/* Step tracker + Element map — fade in after assembly */}
       <div
         style={{
-          opacity: landed ? 1 : 0,
-          transition: "opacity 0.4s ease",
+          opacity: assembled ? 1 : 0,
+          transition: "opacity 0.5s ease",
           pointerEvents: !showOverlay ? "auto" : "none",
         }}
       >

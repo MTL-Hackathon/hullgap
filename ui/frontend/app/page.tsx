@@ -1,5 +1,5 @@
-import { BrotWorkspace } from "@/components/brot-workspace";
+import { Workspace } from "@/components/workspace";
 
 export default function Home() {
-  return <BrotWorkspace />;
+  return <Workspace />;
 }

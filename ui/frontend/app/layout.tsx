@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Project BROT — Beyond DFT Optimization Toolkit",
+  title: "Matter of Fact",
   description:
     "Discover stable crystal structures with machine-learned interatomic potentials.",
 };
