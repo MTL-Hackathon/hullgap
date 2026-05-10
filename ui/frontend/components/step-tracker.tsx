@@ -1,6 +1,6 @@
 "use client";
 
-export type Step = "candidates" | "validation" | "viewer";
+export type Step = "elements" | "candidates" | "validation" | "viewer";
 
 const TOTAL_STEPS = 3;
 
@@ -14,46 +14,46 @@ interface StepItem {
 
 export function StepTracker({
   step,
-  stepIndex,
+  canOpenElements,
   canOpenCandidates,
   canOpenValidation,
-  canOpenViewer,
+  onOpenElements,
   onOpenCandidates,
   onOpenValidation,
-  onOpenViewer,
 }: {
   step: Step;
-  stepIndex: number;
+  canOpenElements: boolean;
   canOpenCandidates: boolean;
   canOpenValidation: boolean;
-  canOpenViewer: boolean;
+  onOpenElements: () => void;
   onOpenCandidates: () => void;
   onOpenValidation: () => void;
-  onOpenViewer: () => void;
 }) {
   const items: StepItem[] = [
     {
       n: "01",
+      title: "Element Mapping",
+      active: step === "elements",
+      locked: !canOpenElements,
+      onClick: onOpenElements,
+    },
+    {
+      n: "02",
       title: "Candidate Generation",
       active: step === "candidates",
       locked: !canOpenCandidates,
       onClick: onOpenCandidates,
     },
     {
-      n: "02",
-      title: "MACE Validation",
-      active: step === "validation",
+      n: "03",
+      title: "DFT Verification",
+      active: step === "validation" || step === "viewer",
       locked: !canOpenValidation,
       onClick: onOpenValidation,
     },
-    {
-      n: "03",
-      title: "Crystal Viewer",
-      active: step === "viewer",
-      locked: !canOpenViewer,
-      onClick: onOpenViewer,
-    },
   ];
+
+  const stepIndex = step === "elements" ? 0 : step === "candidates" ? 1 : 2;
 
   return (
     <ol className="relative grid w-full grid-cols-3 gap-4">

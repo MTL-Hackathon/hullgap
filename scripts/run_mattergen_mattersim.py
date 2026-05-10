@@ -134,10 +134,20 @@ def step2_references(elements: list[str], calc,
 # ── Step 3: Relax candidates with MatterSim ──────────────────────────
 
 
-def step3_relax(structures, calc) -> pd.DataFrame:
-    """Relax all candidates and return a DataFrame of results."""
+def step3_relax(structures, calc) -> tuple[pd.DataFrame, list]:
+    """Relax all candidates and return (results DataFrame, relaxed_structures).
+
+    The returned ``relaxed_structures`` list has the same length and ordering
+    as the input ``structures``; entries for failed relaxations fall back to
+    the original (un-relaxed) structure so downstream indexing stays stable.
+    The CSV stats (volume, energy, fmax) are computed from the *relaxed*
+    geometry, so the saved CIFs MUST be the relaxed ones — otherwise the
+    crystal_system / volume / energy columns disagree with the structure on
+    disk.
+    """
     log.info("=== Step 3: MatterSim relaxation ===")
     results = []
+    relaxed_structures: list = []
     for i, struct in enumerate(structures):
         atoms = AseAtomsAdaptor.get_atoms(struct)
         atoms.calc = calc
@@ -165,6 +175,9 @@ def step3_relax(structures, calc) -> pd.DataFrame:
                 "volume_A3": atoms.get_volume(),
                 "status": status,
             })
+            # Capture the post-relaxation geometry as a pymatgen Structure so
+            # the CIF written in step6_save matches the CSV stats.
+            relaxed_structures.append(AseAtomsAdaptor.get_structure(atoms))
         except Exception as exc:
             log.error("  [%d] FAILED: %s", i, exc)
             results.append({
@@ -177,6 +190,9 @@ def step3_relax(structures, calc) -> pd.DataFrame:
                 "volume_A3": np.nan,
                 "status": f"failed: {exc}",
             })
+            # Keep the index aligned with `structures`; the original geometry
+            # is the best fallback even though no relaxation completed.
+            relaxed_structures.append(struct)
 
     df = pd.DataFrame(results)
     n_conv = (df.status == "converged").sum()
@@ -184,7 +200,7 @@ def step3_relax(structures, calc) -> pd.DataFrame:
     n_fail = df.status.str.startswith("failed").sum()
     log.info("Relaxed %d structures  (converged: %d, max_steps: %d, failed: %d)",
              len(df), n_conv, n_max, n_fail)
-    return df
+    return df, relaxed_structures
 
 
 # ── Step 4: Formation energy + convex hull ───────────────────────────
@@ -520,18 +536,20 @@ def main():
         cache_path=ref_cache,
     )
 
-    df = step3_relax(structures, calc)
+    df, relaxed_structures = step3_relax(structures, calc)
 
     df_ok, hull = step4_hull(df, refs, args.element_b)
 
     if not df_ok.empty:
         step5_plot(df_ok, hull, args.element_a, args.element_b, plot_path)
-        step6_save(df_ok, structures, results_csv, output_dir, system)
+        # All downstream steps must use the *relaxed* structures so the CIFs
+        # on disk match the CSV's volume / energy / crystal_system columns.
+        step6_save(df_ok, relaxed_structures, results_csv, output_dir, system)
 
         if not args.skip_properties:
             n_top = args.n_property_candidates
-            df_ok = step7_phonons(df_ok, structures, calc, n_top=n_top)
-            df_ok = step8_elastic(df_ok, structures, calc, n_top=n_top)
+            df_ok = step7_phonons(df_ok, relaxed_structures, calc, n_top=n_top)
+            df_ok = step8_elastic(df_ok, relaxed_structures, calc, n_top=n_top)
 
             prop_plot_path = results_csv.with_name(
                 f"{system}_properties.png"

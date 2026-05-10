@@ -57,16 +57,22 @@ async function loadHullCSV(elementA: string, elementB: string) {
     try {
       const csv = await readFile(join(DATA_DIR, filename), "utf-8");
       const rows = parseCSV(csv);
-      return rows.map((row) => ({
-        composition: row.formula,
-        formula: row.formula,
-        n_atoms: parseInt(row.n_atoms, 10),
-        x_B: parseFloat(row.x_B),
-        formation_energy_eV_atom: parseFloat(row.e_form_eV_atom),
-        e_above_hull_eV_atom: parseFloat(row.e_above_hull_eV_atom),
-        predicted_stable: row.on_hull === "True",
-        crystal_system: row.crystal_system || "Unknown",
-      }));
+      const system = filename.replace(/_mattersim_hull\.csv$/, "");
+      return rows.map((row) => {
+        const parsedIdx = parseInt(row.idx, 10);
+        return {
+          composition: row.formula,
+          formula: row.formula,
+          n_atoms: parseInt(row.n_atoms, 10),
+          x_B: parseFloat(row.x_B),
+          formation_energy_eV_atom: parseFloat(row.e_form_eV_atom),
+          e_above_hull_eV_atom: parseFloat(row.e_above_hull_eV_atom),
+          predicted_stable: row.on_hull === "True",
+          crystal_system: row.crystal_system || "Unknown",
+          idx: Number.isFinite(parsedIdx) ? parsedIdx : undefined,
+          system,
+        };
+      });
     } catch {
       continue;
     }

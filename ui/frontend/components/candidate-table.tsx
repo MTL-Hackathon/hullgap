@@ -4,11 +4,10 @@ import { Fragment, useCallback, useEffect, useMemo, useState, useSyncExternalSto
 import { ChevronRight, Loader2 } from "lucide-react";
 import { Canvas } from "@react-three/fiber";
 import type { CandidateResult, StructureData } from "@/lib/types";
-import { fetchStructure } from "@/lib/api-client";
+import { fetchStructure, fetchStructureByIdx } from "@/lib/api-client";
 import {
   StructureScene,
   ELEMENT_COLORS,
-  PROTOTYPES,
   guessPrototype,
 } from "./crystal-viewer";
 
@@ -39,32 +38,37 @@ function ExpandedRow({
   const [structure, setStructure] = useState<StructureData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProto, setSelectedProto] = useState(() => guessPrototype(candidate.x_B));
-
-  const loadStructure = useCallback(
-    async (proto: string) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchStructure(elementA, elementB, proto);
-        setStructure(data);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load structure");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [elementA, elementB],
-  );
-
   useEffect(() => {
-    loadStructure(selectedProto);
-  }, [selectedProto, loadStructure]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    // Same logic as CrystalViewer: prefer the real relaxed CIF when the
+    // candidate carries a hull-CSV row identifier. Only fall back to the
+    // synthetic prototype when no idx/system is available.
+    const hasRealStructure =
+      typeof candidate.idx === "number" &&
+      Number.isFinite(candidate.idx) &&
+      !!candidate.system;
+
+    const fetchPromise = hasRealStructure
+      ? fetchStructureByIdx(candidate.system as string, candidate.idx as number)
+          .catch(() =>
+            fetchStructure(elementA, elementB, guessPrototype(candidate.x_B))
+          )
+      : fetchStructure(elementA, elementB, guessPrototype(candidate.x_B));
+
+    fetchPromise
+      .then((data) => { if (!cancelled) setStructure(data); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load structure"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [candidate, elementA, elementB]);
 
   const cameraDistance = useMemo(() => {
     if (!structure) return 10;
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 3.0;
+    return Math.max(a, b, c) * 1.8;
   }, [structure]);
 
   return (
@@ -188,21 +192,10 @@ function ExpandedRow({
 
             {/* Right: 3D viewer */}
             <div>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Structure preview
                 </h4>
-                <select
-                  value={selectedProto}
-                  onChange={(e) => setSelectedProto(e.target.value)}
-                  className="h-7 rounded-md border border-[var(--border)] bg-white px-2 text-xs text-[var(--foreground)]"
-                >
-                  {PROTOTYPES.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {loading && (

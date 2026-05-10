@@ -57,6 +57,27 @@ export async function fetchStructure(
   return res.json();
 }
 
+/**
+ * Load the actual relaxed CIF for a candidate. The backend reads
+ * data/mattergen/{system}/relaxed/{system}_{idx:03d}_*.cif so the rendered
+ * structure agrees with the candidate row's crystal_system label.
+ */
+export async function fetchStructureByIdx(
+  system: string,
+  idx: number
+): Promise<StructureData> {
+  const res = await fetch("/api/structure_by_idx", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, idx }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || "Failed to fetch structure");
+  }
+  return res.json();
+}
+
 export async function fetchMpPhases(
   elementA: string,
   elementB: string

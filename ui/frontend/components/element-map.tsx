@@ -8,7 +8,44 @@ type Cat =
   | "metalloid" | "nonmetal" | "noble"
   | "lanthanide" | "actinide";
 
-type Vec2 = { x: number; y: number };
+type Vec3 = { x: number; y: number; z: number };
+
+// ─── 3D projection ──────────────────────────────────────────────────────
+const FOCAL = 900;
+
+function projectPoint(
+  p: Vec3,
+  rot: { x: number; y: number },
+  cx: number,
+  cy: number,
+): { x: number; y: number; s: number } {
+  const dx = p.x - cx, dy = p.y - cy, dz = p.z;
+  const cosX = Math.cos(rot.x), sinX = Math.sin(rot.x);
+  const cosY = Math.cos(rot.y), sinY = Math.sin(rot.y);
+  const x1 =  dx * cosY + dz * sinY;
+  const z1 = -dx * sinY + dz * cosY;
+  const y2 =  dy * cosX - z1 * sinX;
+  const z2 =  dy * sinX + z1 * cosX;
+  const s  = FOCAL / (FOCAL + z2);
+  return { x: cx + x1 * s, y: cy + y2 * s, s };
+}
+
+function zoomedPoint(p: Vec3, zoom: number, cx: number, cy: number): Vec3 {
+  return {
+    x: cx + (p.x - cx) * zoom,
+    y: cy + (p.y - cy) * zoom,
+    z: p.z * zoom,
+  };
+}
+
+// Connection line styling: count → { width, colour }
+function connStyle(count: number): { width: number; color: string } {
+  if (count >= 15) return { width: 3.5, color: "rgba(40,40,40,0.70)" };
+  if (count >= 9)  return { width: 2.5, color: "rgba(70,70,70,0.55)" };
+  if (count >= 5)  return { width: 1.8, color: "rgba(100,100,100,0.40)" };
+  if (count >= 3)  return { width: 1.2, color: "rgba(140,140,140,0.28)" };
+  return { width: 0.8, color: "rgba(180,180,180,0.18)" };
+}
 
 interface El {
   z: number; s: string; n: string; en: number; m: number;
@@ -182,9 +219,11 @@ const ELEMENTS: El[] = RAW.map(([z,s,n,en,m,cat,col,row]) => ({
 
 const RAD_MIN = 25;
 const RAD_MAX = 260;
-function scatterR(el: El, cs: number): number {
+const SCATTER_2D_SCALE = 0.82;
+function scatterR(el: El, cs: number, mode: "2d" | "3d" = "3d"): number {
   const t = (el.rad - RAD_MIN) / (RAD_MAX - RAD_MIN);
-  return (cs / 2) * (0.55 + t * 0.9);
+  const base = (cs / 2) * (0.55 + t * 0.9);
+  return mode === "2d" ? base * SCATTER_2D_SCALE : base;
 }
 
 // ─── Color config ───────────────────────────────────────────────────────
@@ -221,11 +260,50 @@ const N_COLS    = 18;
 const PAD       = 16;
 const GAP       = 2;
 const SCATTER_H = 560;
-const LERP       = 0.14;
-const SHAPE_LERP = 0.22;
+const LERP       = 0.11;
+const SHAPE_LERP = 0.09;
 const INACTIVE_ALPHA = 0.15;
 
-// ─── Scatter angle / spread per group ───────────────────────────────────
+// ─── Group elevation bands on the sphere ────────────────────────────────
+// Each chemical group lives on a fixed latitude (polar angle θ from the
+// north pole). Within a band, members are spread along the azimuth φ
+// using the golden angle so they fan out without overlap.
+//
+// Coordinate convention (canvas / camera space):
+//   +x = right    -x = left
+//   +y = down     -y = up        (canvas y grows downward)
+//   +z = away     -z = toward camera
+//
+// θ = 0   → north pole = straight up    (-y)
+// θ = π   → south pole = straight down  (+y)
+// θ = π/2 → equator (x–z ring)
+//
+// Bands are ordered roughly by Pauling EN: most electronegative groups
+// (nonmetal, noble) near the top pole, least electronegative (alkaline,
+// alkali) near the bottom pole. This matches the underlying chemistry
+// and makes the sphere feel "right" when rotated.
+const GROUP_THETA: Record<Cat, number> = (() => {
+  const order: Cat[] = [
+    "nonmetal", "noble", "metalloid", "post-tm",
+    "tm", "lanthanide", "actinide", "alkaline", "alkali",
+  ];
+  // Stay clear of the exact poles so sin(θ) doesn't collapse the band.
+  const thetaMin = Math.PI * 0.18;
+  const thetaMax = Math.PI * 0.82;
+  const out = {} as Record<Cat, number>;
+  order.forEach((cat, i) => {
+    out[cat] = thetaMin + (thetaMax - thetaMin) * (i / (order.length - 1));
+  });
+  return out;
+})();
+
+// Golden angle (~137.5°) — successive members of a band step by this in
+// azimuth so adjacent EN-rank atoms don't end up at adjacent longitudes.
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+// ─── 2D scatter angle / spread per group ────────────────────────────────
+// Used by the flat (2D) view: each group fans out from the anchor in a
+// fixed sector of the plane; spread sets the angular width of that fan.
 const GROUP_ANGLE: Record<string, number> = {
   nonmetal:   -Math.PI * 0.50,
   metalloid:  -Math.PI * 0.15,
@@ -266,17 +344,119 @@ function drawRoundRect(
   ctx.closePath();
 }
 
-// ─── Scatter computation ────────────────────────────────────────────────
-function computeScatter(
+// ─── 3D scatter computation ─────────────────────────────────────────────
+// The anchor sits at the origin. Every other relevant element is placed
+// at:
+//   • a DIRECTION (θ, φ) on the unit sphere — θ is the chemical group's
+//     fixed elevation band, φ is index-within-group × golden angle. So
+//     latitude encodes chemistry; longitude spreads members of the same
+//     family around their band so they don't overlap.
+//   • a RADIAL DISTANCE r monotone in |ΔEN(anchor, atom)| — chemically
+//     close-EN atoms appear close to the centre, distant atoms sit far
+//     out. minR keeps the nearest atom clear of the anchor's circle.
+//
+// Members of a group are sorted by EN closeness before φ is assigned,
+// so adjacent indices (= adjacent golden-angle longitudes) walk
+// outward along the radial axis instead of jumping randomly.
+function compute3DScatter(
   anchorIdx: number, cx: number, cy: number,
   cs: number, w: number, h: number,
-): { pts: Vec2[]; enScale: number } {
+): { pts: Vec3[]; enScale: number } {
   const anchor = ELEMENTS[anchorIdx];
-  const aR     = scatterR(anchor, cs);
+
+  // Actual max ΔEN among relevant non-anchor atoms with known EN.
+  let maxDEN = 0;
+  ELEMENTS.forEach((el, i) => {
+    if (i === anchorIdx || !el.relevant || el.en === 0 || anchor.en === 0) return;
+    maxDEN = Math.max(maxDEN, Math.abs(anchor.en - el.en));
+  });
+  if (maxDEN < 0.1) maxDEN = 1;
+  const enScale = maxDEN * 1.05;
+
+  // Radial distance bounds. minR keeps even the closest-EN atom clear
+  // of the anchor's drawn circle plus some buffer. maxR is the canvas
+  // fit budget.
+  const aR       = scatterR(anchor, cs);
+  const margin   = cs;
+  const maxAtomR = (cs / 2) * 1.45;
+  const minR     = Math.max(aR + maxAtomR + cs * 1.2, 120);
+  const maxR     = Math.max(minR + cs * 2, Math.min(w / 2, h / 2) - margin);
+
+  // Group every relevant non-anchor element by category, then sort each
+  // group by EN closeness so index-within-group walks outward from the
+  // anchor along the radial axis.
+  const byGroup: Record<string, number[]> = {};
+  ELEMENTS.forEach((el, i) => {
+    if (i === anchorIdx || !el.relevant) return;
+    (byGroup[el.cat] ??= []).push(i);
+  });
+  Object.values(byGroup).forEach(idxs =>
+    idxs.sort((a, b) =>
+      Math.abs(anchor.en - ELEMENTS[a].en) -
+      Math.abs(anchor.en - ELEMENTS[b].en),
+    ),
+  );
+
+  // Anchor sits at the centre. Non-relevant elements collapse there
+  // too — they're invisible in scatter/compound mode so we never see
+  // them.
+  const pts: Vec3[] = ELEMENTS.map(() => ({ x: cx, y: cy, z: 0 }));
+
+  for (const [group, idxs] of Object.entries(byGroup)) {
+    const theta = GROUP_THETA[group as Cat] ?? Math.PI / 2;
+    const sinT  = Math.sin(theta);
+    const cosT  = Math.cos(theta);
+
+    idxs.forEach((idx, k) => {
+      // Azimuthal spread by golden angle. The +0.5 offset keeps a single
+      // member from landing exactly at φ=0 and gives small groups a more
+      // pleasing rotation around their band.
+      const phi = (k + 0.5) * GOLDEN_ANGLE;
+      const cp  = Math.cos(phi);
+      const sp  = Math.sin(phi);
+
+      // Spherical → canvas-camera Cartesian:
+      //   north pole (θ=0) → -y (up of canvas), south pole → +y (down).
+      //   Azimuth wraps in the x–z plane.
+      const dirX =  sinT * cp;
+      const dirY = -cosT;
+      const dirZ =  sinT * sp;
+
+      // Radial distance is *linearly* proportional to |ΔEN| so the
+      // visual distance honestly reads as the chemical distance. Atoms
+      // with unknown EN go to maxR.
+      const el = ELEMENTS[idx];
+      const dEN = (el.en === 0 || anchor.en === 0)
+        ? maxDEN
+        : Math.abs(anchor.en - el.en);
+      const dNorm = Math.min(dEN / enScale, 1);
+      const r = minR + dNorm * (maxR - minR);
+
+      pts[idx] = {
+        x: cx + dirX * r,
+        y: cy + dirY * r,
+        z:        dirZ * r,
+      };
+    });
+  }
+
+  return { pts, enScale };
+}
+
+// ─── 2D scatter computation (flat view) ─────────────────────────────────
+// Original radial layout. Each group occupies a sector of the plane
+// (GROUP_ANGLE ± GROUP_SPREAD/2); members are placed along that fan
+// with sqrt-scaled radius, then a collision relaxer pushes overlapping
+// circles apart while keeping the anchor pinned.
+function compute2DScatter(
+  anchorIdx: number, cx: number, cy: number,
+  cs: number, w: number, h: number,
+): { pts: Vec3[]; enScale: number } {
+  const anchor = ELEMENTS[anchorIdx];
+  const aR     = scatterR(anchor, cs, "2d");
   const maxR   = Math.min(w / 2 - cs * 0.8, h / 2 - cs * 0.8);
   const minR   = Math.max(aR + cs * 0.6, 50);
 
-  // Compute actual max ΔEN so distance is truly proportional
   let maxDEN = 0;
   ELEMENTS.forEach((el, i) => {
     if (i === anchorIdx || !el.relevant || el.en === 0) return;
@@ -291,7 +471,7 @@ function computeScatter(
     (byGroup[el.cat] ??= []).push(i);
   });
 
-  const pts: Vec2[] = ELEMENTS.map(() => ({ x: cx, y: cy }));
+  const pts: Vec3[] = ELEMENTS.map(() => ({ x: cx, y: cy, z: 0 }));
 
   for (const [group, idxs] of Object.entries(byGroup)) {
     const base   = GROUP_ANGLE[group]  ?? 0;
@@ -304,19 +484,19 @@ function computeScatter(
       const r   = minR + Math.sqrt(Math.min(dEN / enScale, 1)) * (maxR - minR);
       const off = idxs.length === 1 ? 0 : spread * (k / (idxs.length - 1) - 0.5);
       const a   = base + off;
-      pts[idx]  = { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+      pts[idx]  = { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, z: 0 };
     });
   }
 
-  // Collision resolution — anchor stays fixed, pushes others away
+  // Collision resolution — anchor stays fixed, pushes others away.
   for (let iter = 0; iter < 300; iter++) {
     let moved = false;
     for (let i = 0; i < pts.length; i++) {
       if (i !== anchorIdx && !ELEMENTS[i].relevant) continue;
-      const rI = scatterR(ELEMENTS[i], cs);
+      const rI = scatterR(ELEMENTS[i], cs, "2d");
       for (let j = i + 1; j < pts.length; j++) {
         if (j !== anchorIdx && !ELEMENTS[j].relevant) continue;
-        const rJ = scatterR(ELEMENTS[j], cs);
+        const rJ = scatterR(ELEMENTS[j], cs, "2d");
         const minD = rI + rJ + 8;
         const dx = pts[j].x - pts[i].x;
         const dy = pts[j].y - pts[i].y;
@@ -341,7 +521,7 @@ function computeScatter(
 
   pts.forEach((p, i) => {
     if (i === anchorIdx || !ELEMENTS[i].relevant) return;
-    const margin = scatterR(ELEMENTS[i], cs) + 6;
+    const margin = scatterR(ELEMENTS[i], cs, "2d") + 6;
     p.x = Math.max(margin, Math.min(w - margin, p.x));
     p.y = Math.max(margin, Math.min(h - margin, p.y));
   });
@@ -361,13 +541,17 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const compoundPanelRef = useRef<HTMLDivElement>(null);
 
-  const posRef     = useRef<Vec2[]>([]);
-  const tgtRef     = useRef<Vec2[]>([]);
+  const posRef     = useRef<Vec3[]>([]);
+  const tgtRef     = useRef<Vec3[]>([]);
   const opacityRef = useRef<number[]>([]);
   const cellRef    = useRef(0);
   const cwRef      = useRef(0);
   const chRef      = useRef(0);
+  // Target canvas height — lerped toward by the tick loop so the canvas
+  // morphs smoothly between grid_h and SCATTER_H instead of snapping.
+  const targetHRef = useRef(0);
   const rafRef     = useRef(0);
+  const drawRafRef = useRef(0);
   const selARef    = useRef<number | null>(null);
   const selBRef    = useRef<number | null>(null);
   const hoverRef   = useRef<number | null>(null);
@@ -377,10 +561,24 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   const enScaleRef = useRef(2.5);
   const shapeRef   = useRef<number[]>([]);
 
+  // 3D camera state
+  const rotRef       = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const zoomRef      = useRef<number>(1);
+  const dragRef      = useRef<{ mx: number; my: number; rx: number; ry: number } | null>(null);
+  const dragMovedRef = useRef(false);
+  // Cached projected positions (computed at the top of every draw, reused
+  // by hit-testing & tooltip placement after the draw completes).
+  const projRef      = useRef<{ x: number; y: number; s: number }[]>([]);
+
   const [selectedA, setSelectedA] = useState<number | null>(null);
   const [selectedB, setSelectedB] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [nCandidates, setNCandidates] = useState(12);
+  // 2D is the default scatter view; 3D enables the spherical band layout
+  // with rotation + zoom. The ref tracks the same value for the canvas
+  // loop so handlers can read it without a re-render dependency.
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const viewModeRef = useRef<"2d" | "3d">("2d");
 
   // MP phase data
   interface MpPhase {
@@ -419,11 +617,12 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     chRef.current = h;
   }, []);
 
-  const gridTargets = useCallback((w: number, cs: number): Vec2[] => {
+  const gridTargets = useCallback((w: number, cs: number): Vec3[] => {
     const step = cs + GAP;
     return ELEMENTS.map(el => ({
       x: PAD + el.col * step + cs / 2,
       y: gridYFn(el.row, step) + cs / 2,
+      z: 0,
     }));
   }, []);
 
@@ -456,95 +655,33 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     const hov  = hoverRef.current;
     const m    = modeRef();
     const font = "ui-sans-serif,system-ui,-apple-system,sans-serif";
+    const cx   = w / 2;
+    const cy   = h / 2;
+    const rot  = rotRef.current;
+    const zoom = zoomRef.current;
 
     ctx.clearRect(0, 0, w, h);
 
-    // ── Radial EN-compatibility background (scatter only) ──────────
-    if (m === "scatter" && selA !== null) {
-      const anchorPos = posRef.current[selA];
-      if (anchorPos) {
-        const enScale = enScaleRef.current;
-        const maxR = Math.min(w / 2 - cs, h / 2 - cs);
-        const aR = scatterR(ELEMENTS[selA], cs);
-        const minR = Math.max(aR * 2 + 20, 80);
+    // ── Project all positions through zoom + rotation + perspective ───
+    const projected: { x: number; y: number; s: number }[] =
+      ELEMENTS.map((_, i) => {
+        const p = posRef.current[i];
+        if (!p) return { x: 0, y: 0, s: 1 };
+        const zp = zoomedPoint(p, zoom, cx, cy);
+        return projectPoint(zp, rot, cx, cy);
+      });
+    projRef.current = projected;
 
-        // EN ring guides at meaningful intervals
-        ctx.save();
-        ctx.setLineDash([3, 6]);
-        ctx.lineWidth = 1;
-
-        const labelAngle = -Math.PI * 0.67;
-        const ringStep = enScale > 2 ? 0.5 : enScale > 1 ? 0.25 : 0.1;
-        for (let dEN = ringStep; dEN <= enScale; dEN += ringStep) {
-          const r = minR + (dEN / enScale) * (maxR - minR);
-          if (r > maxR + 20) break;
-
-          ctx.strokeStyle = "rgba(209,213,219,0.35)";
-          ctx.beginPath();
-          ctx.arc(anchorPos.x, anchorPos.y, r, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.save();
-          ctx.setLineDash([]);
-          ctx.fillStyle = "rgba(156,163,175,0.55)";
-          ctx.font = `600 10px ${font}`;
-          const lx = anchorPos.x + Math.cos(labelAngle) * r;
-          const ly = anchorPos.y + Math.sin(labelAngle) * r;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "bottom";
-          ctx.fillText(`ΔEN ${dEN.toFixed(dEN < 0.5 ? 2 : 1)}`, lx, ly - 4);
-          ctx.restore();
-        }
-        ctx.restore();
-
-        const anchor = ELEMENTS[selA];
-        const anchorVR = scatterR(anchor, cs);
-        ctx.fillStyle = "rgba(156,163,175,0.7)";
-        ctx.font = `500 10px ${font}`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillText(`EN ${anchor.en.toFixed(2)}`, anchorPos.x, anchorPos.y + anchorVR + 4);
-      }
-    }
-
-    // ── Connection lines (scatter / compound, binary compound counts) ─
-    if ((m === "scatter" || m === "compound") && selA !== null) {
-      const aPos = posRef.current[selA];
-      const counts = binaryCountsRef.current;
-      if (aPos && Object.keys(counts).length > 0) {
-        ctx.save();
-        ctx.lineWidth = 1.4;
-        ELEMENTS.forEach((el, i) => {
-          if (i === selA || !el.relevant) return;
-          const p = posRef.current[i];
-          if (!p || opacityRef.current[i] < 0.05) return;
-          const cnt = counts[el.s];
-          if (!cnt || cnt.total === 0) return;
-
-          const dx = p.x - aPos.x, dy = p.y - aPos.y;
-          const len = Math.hypot(dx, dy);
-          if (len < 1) return;
-
-          const nLines = Math.min(Math.ceil(cnt.total / 2), 5);
-          const nx = -dy / len, ny = dx / len;
-          const spreadPx = Math.min(nLines * 2, 10);
-          const aR = scatterR(ELEMENTS[selA], cs);
-          const eR = scatterR(el, cs);
-          const f0 = aR / len, f1 = 1 - eR / len;
-
-          ctx.strokeStyle = "rgba(148,163,184,0.25)";
-
-          for (let k = 0; k < nLines; k++) {
-            const off = nLines === 1 ? 0 : spreadPx * (k / (nLines - 1) - 0.5);
-            ctx.beginPath();
-            ctx.moveTo(aPos.x + dx * f0 + nx * off, aPos.y + dy * f0 + ny * off);
-            ctx.lineTo(aPos.x + dx * f1 + nx * off, aPos.y + dy * f1 + ny * off);
-            ctx.stroke();
-          }
-        });
-        ctx.restore();
-      }
-    }
+    // Helper: draw radius for an element at index i in current mode +
+    // current shape morph state (does NOT include hover scaling).
+    const drawnRadius = (i: number): number => {
+      const el = ELEMENTS[i];
+      const proj = projected[i];
+      const shape = shapeRef.current[i] ?? 0;
+      const gridR    = cs / 2;
+      const scatterRR = scatterR(el, cs, viewModeRef.current) * proj.s;
+      return gridR + (scatterRR - gridR) * shape;
+    };
 
     // Lanthanide / actinide indicators in grid mode
     if (m === "grid") {
@@ -562,14 +699,56 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       ctx.restore();
     }
 
-    // ── elements (3 passes: bg → normal → hovered) ─────────────────────
+    // ── Connection lines (binary-compound counts) ─────────────────────
+    // One line per connection. Encode count via thickness + grey shade
+    // only. Lines start/end at the node circle edges so they kiss the
+    // borders cleanly at any zoom level.
+    if ((m === "scatter" || m === "compound") && selA !== null) {
+      const aProj = projected[selA];
+      const counts = binaryCountsRef.current;
+      if (aProj && Object.keys(counts).length > 0) {
+        const aR = drawnRadius(selA);
+        ctx.save();
+        ctx.lineCap = "round";
+        ELEMENTS.forEach((el, i) => {
+          if (i === selA || !el.relevant) return;
+          if ((opacityRef.current[i] ?? 0) < 0.05) return;
+          const cnt = counts[el.s];
+          if (!cnt || cnt.total === 0) return;
+
+          const p = projected[i];
+          if (!p) return;
+
+          const dx = p.x - aProj.x, dy = p.y - aProj.y;
+          const len = Math.hypot(dx, dy);
+          if (len < 1) return;
+
+          const eR = drawnRadius(i);
+          const f0 = aR / len;
+          const f1 = 1 - eR / len;
+          if (f1 <= f0) return; // circles overlap — skip
+
+          const { width, color } = connStyle(cnt.total);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.beginPath();
+          ctx.moveTo(aProj.x + dx * f0, aProj.y + dy * f0);
+          ctx.lineTo(aProj.x + dx * f1, aProj.y + dy * f1);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+    }
+
+    // ── elements ──────────────────────────────────────────────────────
     // Unified draw: interpolates shape between square (grid) and circle
-    // (scatter) using shapeRef (0 = square, 1 = circle).
+    // (scatter) using shapeRef (0 = square, 1 = circle), scaling by the
+    // perspective factor s so far nodes appear smaller.
     const drawEl = (i: number) => {
-      const el  = ELEMENTS[i];
-      const pos = posRef.current[i];
-      const opa = opacityRef.current[i];
-      if (!pos || opa < 0.01) return;
+      const el   = ELEMENTS[i];
+      const proj = projected[i];
+      const opa  = opacityRef.current[i];
+      if (!proj || opa < 0.01) return;
 
       const isAnchor   = i === selA;
       const isSelected = i === selB;
@@ -578,17 +757,18 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       const c          = CAT_COLORS[el.cat];
       const shape      = shapeRef.current[i] ?? 0;
 
-      // Interpolate size: grid square ↔ scatter circle
+      // Grid square has no perspective (z=0 → s=1), scatter circle uses
+      // perspective scaling so far nodes shrink.
       const gridSize    = cs * hScale;
-      const scatterDiam = scatterR(el, cs) * 2 * hScale;
+      const scatterDiam = scatterR(el, cs, viewModeRef.current) * 2 * proj.s * hScale;
       const size        = gridSize + (scatterDiam - gridSize) * shape;
       const bRadius     = 5 + (size / 2 - 5) * shape;
 
       ctx.save();
       ctx.globalAlpha = opa;
 
-      const bx = pos.x - size / 2;
-      const by = pos.y - size / 2;
+      const bx = proj.x - size / 2;
+      const by = proj.y - size / 2;
       drawRoundRect(ctx, bx, by, size, size, bRadius);
 
       const isScatter = shape > 0.5;
@@ -631,23 +811,51 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       ctx.font = `600 ${fontSize}px ${font}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(el.s, pos.x, pos.y);
+      ctx.fillText(el.s, proj.x, proj.y);
 
       ctx.restore();
     };
 
-    ELEMENTS.forEach((el, i) => { if (!el.relevant && i !== hov) drawEl(i); });
-    ELEMENTS.forEach((el, i) => { if (el.relevant && i !== hov) drawEl(i); });
-    if (hov !== null) drawEl(hov);
+    // Depth sort: furthest first (smallest s) so closer nodes render on
+    // top. Anchor is always drawn last so it stays visible when zoomed
+    // in close. Hovered element draws second-to-last so its halo shows.
+    if (m === "grid") {
+      ELEMENTS.forEach((el, i) => { if (!el.relevant && i !== hov) drawEl(i); });
+      ELEMENTS.forEach((el, i) => { if (el.relevant && i !== hov && i !== selA) drawEl(i); });
+      if (hov !== null && hov !== selA) drawEl(hov);
+      if (selA !== null) drawEl(selA);
+    } else {
+      // 3D: include the anchor in the z-order sort so atoms in front of
+      // it (rotated z < 0) draw on top and atoms behind draw underneath.
+      // 2D: everything is on the z=0 plane, so the sort is meaningless;
+      // fall back to the original behaviour where the anchor always
+      // draws last so it stays visible on top.
+      const is3D = viewModeRef.current === "3d";
+      const order = ELEMENTS.map((_, i) => i)
+        .filter(i => i !== hov && (is3D || i !== selA))
+        .sort((a, b) => projected[a].s - projected[b].s);
+      order.forEach(i => drawEl(i));
+      if (hov !== null && (is3D || hov !== selA)) drawEl(hov);
+      if (!is3D && selA !== null) drawEl(selA);
+    }
 
-    if (tooltipRef.current && hov !== null && posRef.current[hov]) {
-      const p = posRef.current[hov];
-      const shape = shapeRef.current[hov] ?? 0;
-      const hovR = cs / 2 + (scatterR(ELEMENTS[hov], cs) - cs / 2) * shape;
+    // Tooltip — position above the hovered node using its projected
+    // screen coords + drawn radius (with hover scale).
+    if (tooltipRef.current && hov !== null && projected[hov]) {
+      const p     = projected[hov];
+      const hovR  = drawnRadius(hov) * 1.14;
       tooltipRef.current.style.transform =
         `translate(${p.x}px, ${p.y - hovR - 6}px)`;
     }
   }, []);
+
+  // Schedule a single redraw on the next animation frame. Used by event
+  // handlers and async callbacks — never call draw() directly from a
+  // handler, otherwise renders stack up and motion feels rocky.
+  const scheduleDraw = useCallback(() => {
+    cancelAnimationFrame(drawRafRef.current);
+    drawRafRef.current = requestAnimationFrame(draw);
+  }, [draw]);
 
   // ── animation loop ────────────────────────────────────────────────────
 
@@ -658,14 +866,15 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     posRef.current.forEach((p, i) => {
       const t = tgtRef.current[i];
       if (!t) return;
-      const dx = t.x - p.x, dy = t.y - p.y;
-      const dist = Math.hypot(dx, dy);
+      const dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (dist > 0.3) {
         const speed = LERP + Math.min(dist / 800, 0.08);
         p.x += dx * speed;
         p.y += dy * speed;
+        p.z += dz * speed;
         done = false;
-      } else { p.x = t.x; p.y = t.y; }
+      } else { p.x = t.x; p.y = t.y; p.z = t.z; }
     });
 
     opacityRef.current.forEach((o, i) => {
@@ -693,6 +902,19 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       }
     });
 
+    // Morph canvas height alongside the rest so the page doesn't snap
+    // when transitioning between the periodic table and the nodegraph.
+    const tH = targetHRef.current;
+    if (tH > 0) {
+      const dh = tH - chRef.current;
+      if (Math.abs(dh) > 0.5) {
+        resizeCanvas(cwRef.current, chRef.current + dh * LERP);
+        done = false;
+      } else if (chRef.current !== tH) {
+        resizeCanvas(cwRef.current, tH);
+      }
+    }
+
     draw();
 
     if (!done) {
@@ -701,7 +923,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     } else {
       animRef.current = false;
     }
-  }, [draw]);
+  }, [draw, resizeCanvas]);
 
   const startAnim = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -716,13 +938,18 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     const step = cs + GAP;
     const h    = gridYFn(9, step) + cs + PAD;
     cellRef.current = cs;
-    resizeCanvas(w, h);
+    // Width changes apply immediately; height is lerped by the tick loop
+    // so the canvas morphs smoothly into / out of the scatter view.
+    if (cwRef.current !== w) resizeCanvas(w, chRef.current || h);
+    targetHRef.current = h;
     tgtRef.current = gridTargets(w, cs);
   }, [resizeCanvas, gridTargets]);
 
   const goScatter = useCallback((w: number, anchorIdx: number) => {
-    resizeCanvas(w, SCATTER_H);
-    const result = computeScatter(
+    if (cwRef.current !== w) resizeCanvas(w, chRef.current || SCATTER_H);
+    targetHRef.current = SCATTER_H;
+    const compute = viewModeRef.current === "3d" ? compute3DScatter : compute2DScatter;
+    const result = compute(
       anchorIdx, w / 2, SCATTER_H / 2, cellRef.current, w, SCATTER_H,
     );
     tgtRef.current = result.pts;
@@ -745,6 +972,8 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     mpAbortRef.current?.abort();
     binaryCountsRef.current = {};
     binaryAbortRef.current?.abort();
+    rotRef.current = { x: 0, y: 0 };
+    zoomRef.current = 1;
     goGrid(wrap.clientWidth);
     startAnim();
   }, [goGrid, startAnim]);
@@ -796,44 +1025,68 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
         };
         if (!ctrl.signal.aborted) {
           binaryCountsRef.current = json.counts;
-          draw();
+          scheduleDraw();
         }
       }
     } catch { /* ignore abort / network errors */ }
-  }, [draw]);
+  }, [scheduleDraw]);
 
   // ── event handlers ────────────────────────────────────────────────────
 
+  // Find the topmost element under (mx, my) using the most recent
+  // projected positions. In scatter/compound mode, the topmost is the
+  // one with the largest perspective scale (closest to camera).
+  const hitTest = useCallback((mx: number, my: number, m: "grid" | "scatter" | "compound"): number => {
+    const cs = cellRef.current;
+    const projected = projRef.current;
+    let hitIdx = -1;
+    let hitS = -Infinity;
+    for (let i = 0; i < ELEMENTS.length; i++) {
+      if (!ELEMENTS[i].relevant) continue;
+      if ((m === "scatter" || m === "compound") && (opacityRef.current[i] ?? 0) < 0.1) continue;
+      const p = projected[i];
+      if (!p) continue;
+      if (m === "scatter" || m === "compound") {
+        const hitR = scatterR(ELEMENTS[i], cs, viewModeRef.current) * p.s + 3;
+        if (Math.hypot(mx - p.x, my - p.y) <= hitR) {
+          if (p.s > hitS) { hitS = p.s; hitIdx = i; }
+        }
+      } else {
+        const half = cs / 2 + 3;
+        if (Math.abs(mx - p.x) <= half && Math.abs(my - p.y) <= half) {
+          // Grid mode — one shot, first match wins.
+          return i;
+        }
+      }
+    }
+    return hitIdx;
+  }, []);
+
   const onCanvasClick = useCallback((e: MouseEvent) => {
+    // Suppress click when the user just finished a rotation drag.
+    if (dragMovedRef.current) {
+      dragMovedRef.current = false;
+      return;
+    }
+
     const canvas = canvasRef.current;
     const wrap   = wrapRef.current;
     if (!canvas || !wrap) return;
     const rect = canvas.getBoundingClientRect();
     const mx   = e.clientX - rect.left;
     const my   = e.clientY - rect.top;
-    const cs   = cellRef.current;
     const m    = modeRef();
     const w    = wrap.clientWidth;
 
-    let hitIdx = -1;
-    for (let i = 0; i < ELEMENTS.length; i++) {
-      if (!ELEMENTS[i].relevant) continue;
-      if ((m === "scatter" || m === "compound") && opacityRef.current[i] < 0.1) continue;
-      const p = posRef.current[i];
-      if (!p) continue;
-      if (m === "scatter" || m === "compound") {
-        const hitR = scatterR(ELEMENTS[i], cs) + 3;
-        if (Math.hypot(mx - p.x, my - p.y) <= hitR) { hitIdx = i; break; }
-      } else {
-        const half = cs / 2 + 3;
-        if (Math.abs(mx - p.x) <= half && Math.abs(my - p.y) <= half) { hitIdx = i; break; }
-      }
-    }
+    const hitIdx = hitTest(mx, my, m);
 
     if (m === "grid") {
       if (hitIdx === -1) return;
       selARef.current = hitIdx;
       setSelectedA(hitIdx);
+      // Reset rotation/zoom so the sphere starts in a neutral pose.
+      rotRef.current = { x: 0, y: 0 };
+      zoomRef.current = 1;
       goScatter(w, hitIdx);
       startAnim();
       fetchBinaryCounts(ELEMENTS[hitIdx].s);
@@ -847,6 +1100,8 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
         setMpPhases(null);
         binaryCountsRef.current = {};
         binaryAbortRef.current?.abort();
+        rotRef.current = { x: 0, y: 0 };
+        zoomRef.current = 1;
         goGrid(w);
         startAnim();
       } else if (hitIdx === -1 && m === "compound") {
@@ -854,75 +1109,143 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
         selBRef.current = null;
         setSelectedB(null);
         setMpPhases(null);
-        draw();
+        scheduleDraw();
       } else if (hitIdx >= 0 && hitIdx !== selBRef.current) {
         // Select (or change) element B
         selBRef.current = hitIdx;
         setSelectedB(hitIdx);
         fetchMpPhases(ELEMENTS[selARef.current!].s, ELEMENTS[hitIdx].s);
-        draw();
+        scheduleDraw();
         setTimeout(() => {
           compoundPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }, 100);
       }
     }
-  }, [goGrid, goScatter, startAnim, draw, fetchBinaryCounts, fetchMpPhases]);
+  }, [goGrid, goScatter, startAnim, scheduleDraw, fetchBinaryCounts, fetchMpPhases, hitTest]);
 
   const prevHoverRef = useRef<number | null>(null);
+
+  const onMouseDown = useCallback((e: MouseEvent) => {
+    const m = modeRef();
+    // Rotation only makes sense in the 3D scatter/compound view.
+    if (m === "grid" || viewModeRef.current !== "3d") return;
+    dragRef.current = {
+      mx: e.clientX, my: e.clientY,
+      rx: rotRef.current.x, ry: rotRef.current.y,
+    };
+    dragMovedRef.current = false;
+    if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
+  }, []);
+
+  const onWindowMouseUp = useCallback(() => {
+    if (dragRef.current) {
+      dragRef.current = null;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const m = modeRef();
+        const grabable = m !== "grid" && viewModeRef.current === "3d";
+        canvas.style.cursor = grabable ? "grab" : "default";
+      }
+    }
+  }, []);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const m = modeRef();
 
+    // ── Rotation drag ─────────────────────────────────────────────────
+    if (dragRef.current) {
+      const d = dragRef.current;
+      const dx = e.clientX - d.mx;
+      const dy = e.clientY - d.my;
+      if (!dragMovedRef.current && Math.hypot(dx, dy) > 3) {
+        dragMovedRef.current = true;
+      }
+      // No clamping on X — allow free rotation past the poles.
+      rotRef.current = {
+        x: d.rx + dy * 0.006,
+        y: d.ry - dx * 0.006,
+      };
+      // While dragging clear hover to keep tooltip from flickering.
+      if (hoverRef.current !== null) {
+        hoverRef.current = null;
+        prevHoverRef.current = null;
+        setHoveredIdx(null);
+      }
+      scheduleDraw();
+      return;
+    }
+
+    // While position-lerp animation is running, suppress hover.
     if (animRef.current) {
       if (hoverRef.current !== null) {
         hoverRef.current = null;
         prevHoverRef.current = null;
         setHoveredIdx(null);
       }
-      canvas.style.cursor = "default";
+      const grabable = m !== "grid" && viewModeRef.current === "3d";
+      canvas.style.cursor = grabable ? "grab" : "default";
       return;
     }
 
     const rect = canvas.getBoundingClientRect();
     const mx   = e.clientX - rect.left;
     const my   = e.clientY - rect.top;
-    const cs   = cellRef.current;
-
-    let hitIdx = -1;
-    for (let i = 0; i < ELEMENTS.length; i++) {
-      if (!ELEMENTS[i].relevant) continue;
-      if ((m === "scatter" || m === "compound") && opacityRef.current[i] < 0.1) continue;
-      const p = posRef.current[i];
-      if (!p) continue;
-      if (m === "scatter" || m === "compound") {
-        const hitR = scatterR(ELEMENTS[i], cs) + 3;
-        if (Math.hypot(mx - p.x, my - p.y) <= hitR) { hitIdx = i; break; }
-      } else {
-        const half = cs / 2 + 3;
-        if (Math.abs(mx - p.x) <= half && Math.abs(my - p.y) <= half) { hitIdx = i; break; }
-      }
-    }
+    const hitIdx = hitTest(mx, my, m);
 
     const newHov = hitIdx >= 0 ? hitIdx : null;
     hoverRef.current = newHov;
-    canvas.style.cursor = newHov !== null ? "pointer" : "default";
+    if (newHov !== null) {
+      canvas.style.cursor = "pointer";
+    } else {
+      const grabable = m !== "grid" && viewModeRef.current === "3d";
+      canvas.style.cursor = grabable ? "grab" : "default";
+    }
 
     if (newHov !== prevHoverRef.current) {
       prevHoverRef.current = newHov;
       setHoveredIdx(newHov);
     }
 
-    draw();
-  }, [draw]);
+    scheduleDraw();
+  }, [scheduleDraw, hitTest]);
 
   const onMouseLeave = useCallback(() => {
     hoverRef.current = null;
     prevHoverRef.current = null;
     setHoveredIdx(null);
-    draw();
-  }, [draw]);
+    scheduleDraw();
+  }, [scheduleDraw]);
+
+  const onWheel = useCallback((e: WheelEvent) => {
+    const m = modeRef();
+    // Wheel zoom only in the 3D scatter view; 2D stays at zoom = 1.
+    if (m === "grid" || viewModeRef.current !== "3d") return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.09 : 1 / 1.09;
+    zoomRef.current = Math.max(0.2, Math.min(5, zoomRef.current * factor));
+    scheduleDraw();
+  }, [scheduleDraw]);
+
+  // ── view-mode toggle ─────────────────────────────────────────────────
+  // Toggling 2D ↔ 3D resets the camera and re-runs the scatter layout
+  // for the current anchor (if any). Animates the morph via the regular
+  // tick loop.
+  const switchViewMode = useCallback((next: "2d" | "3d") => {
+    if (viewModeRef.current === next) return;
+    viewModeRef.current = next;
+    setViewMode(next);
+    rotRef.current = { x: 0, y: 0 };
+    zoomRef.current = 1;
+    const wrap = wrapRef.current;
+    if (wrap && selARef.current !== null) {
+      goScatter(wrap.clientWidth, selARef.current);
+      startAnim();
+    } else {
+      scheduleDraw();
+    }
+  }, [goScatter, startAnim, scheduleDraw]);
 
   const onResize = useCallback(() => {
     const wrap = wrapRef.current;
@@ -933,14 +1256,16 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     if ((m === "compound" || m === "scatter") && selARef.current !== null)
       goScatter(w, selARef.current);
     else goGrid(w);
-    posRef.current = tgtRef.current.map(p => ({ ...p }));
+    // Window resize: snap canvas to the new target — no morph animation.
+    resizeCanvas(w, targetHRef.current);
+    posRef.current = tgtRef.current.map(p => ({ x: p.x, y: p.y, z: p.z }));
     const targetShape = (m === "scatter" || m === "compound") ? 1 : 0;
     ELEMENTS.forEach((el, i) => {
       opacityRef.current[i] = opaTarget(el, i, m);
       shapeRef.current[i] = targetShape;
     });
-    draw();
-  }, [goGrid, goScatter, draw]);
+    scheduleDraw();
+  }, [goGrid, goScatter, scheduleDraw, resizeCanvas]);
 
   // ── mount ─────────────────────────────────────────────────────────────
 
@@ -955,10 +1280,11 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     const h    = gridYFn(9, step) + cs + PAD;
     cellRef.current = cs;
     resizeCanvas(w, h);
+    targetHRef.current = h;
 
     const tgts = gridTargets(w, cs);
     tgtRef.current = tgts;
-    posRef.current = tgts.map(p => ({ ...p }));
+    posRef.current = tgts.map(p => ({ x: p.x, y: p.y, z: p.z }));
     opacityRef.current = ELEMENTS.map(el => el.relevant ? 1.0 : INACTIVE_ALPHA);
     shapeRef.current = ELEMENTS.map(() => 0);
     draw();
@@ -966,6 +1292,9 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     canvas.addEventListener("click",      onCanvasClick);
     canvas.addEventListener("mousemove",  onMouseMove);
     canvas.addEventListener("mouseleave", onMouseLeave);
+    canvas.addEventListener("mousedown",  onMouseDown);
+    canvas.addEventListener("wheel",      onWheel, { passive: false });
+    window.addEventListener("mouseup",    onWindowMouseUp);
     const ro = new ResizeObserver(onResize);
     ro.observe(wrap);
 
@@ -973,10 +1302,14 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       canvas.removeEventListener("click",      onCanvasClick);
       canvas.removeEventListener("mousemove",  onMouseMove);
       canvas.removeEventListener("mouseleave", onMouseLeave);
+      canvas.removeEventListener("mousedown",  onMouseDown);
+      canvas.removeEventListener("wheel",      onWheel);
+      window.removeEventListener("mouseup",    onWindowMouseUp);
       ro.disconnect();
       cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(drawRafRef.current);
     };
-  }, [resizeCanvas, gridTargets, draw, onCanvasClick, onMouseMove, onMouseLeave, onResize]);
+  }, [resizeCanvas, gridTargets, draw, onCanvasClick, onMouseMove, onMouseLeave, onMouseDown, onWheel, onWindowMouseUp, onResize]);
 
   // ── render ────────────────────────────────────────────────────────────
 
@@ -984,22 +1317,61 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   const elB = selectedB !== null ? ELEMENTS[selectedB] : null;
   const hoveredEl = hoveredIdx !== null ? ELEMENTS[hoveredIdx] : null;
 
+  // Sticky mirror of elA so the pair-builder JSX stays mounted while the
+  // wrapper is collapsing back to grid (otherwise the inner content
+  // unmounts the same frame selectedA→null and the close animation
+  // collapses an empty box).
+  const [lastElA, setLastElA] = useState<typeof elA>(null);
+  useEffect(() => {
+    if (elA) setLastElA(elA);
+  }, [elA]);
+  const renderElA = elA ?? lastElA;
+  const expanded = (mode === "scatter" || mode === "compound") && elA != null;
+
   return (
     <section id="periodic-table" className="mx-auto max-w-6xl px-4 pb-10 pt-4 sm:px-6">
       <div className="mb-4">
         <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-          Element Space
+          Microelectronically Relevant Elements
         </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {mode === "compound" && elA && elB
             ? `${elA.n}–${elB.n} selected — see details below. Click another element to change, or ${elA.s} to reset.`
             : mode === "scatter" && elA
               ? `${elA.n} selected — pick a second element to explore the binary compound, or click ${elA.s} to reset.`
-              : "Highlighted elements are microelectronics-relevant. Click one to anchor it and explore electronegativity space."}
+              : "Choose an element of interest to discover compound properties."}
         </p>
       </div>
 
-      <div className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow)]">
+      <div className="relative rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow)]">
+        {mode !== "grid" && (
+        <div
+          role="tablist"
+          aria-label="View mode"
+          className="absolute top-3 right-3 z-20 inline-flex shrink-0 rounded-lg border border-[var(--border)] bg-white p-0.5 text-xs font-medium shadow-sm"
+        >
+          {(["2d", "3d"] as const).map(v => {
+            const active = viewMode === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => switchViewMode(v)}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  active
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                {v.toUpperCase()}
+              </button>
+            );
+          })}
+        </div>
+        )}
+
         <div ref={wrapRef} className="relative">
           <canvas ref={canvasRef} style={{ display: "block" }} />
 
@@ -1115,7 +1487,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
               </p>
             </div>
             <button
-              onClick={() => { selBRef.current = null; setSelectedB(null); setMpPhases(null); draw(); }}
+              onClick={() => { selBRef.current = null; setSelectedB(null); setMpPhases(null); scheduleDraw(); }}
               className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-gray-50 transition-colors"
             >
               ← Back to scatter

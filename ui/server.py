@@ -9,12 +9,16 @@ from __future__ import annotations
 
 import time
 from math import gcd
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MATTERGEN_DIR = REPO_ROOT / "data" / "mattergen"
 
 app = FastAPI(title="Project BROT API")
 
@@ -39,11 +43,52 @@ COMPOSITIONS: list[tuple[int, int]] = [
 NFORM_RANGE = {"pure": (1, 8), "binary": (1, 4)}
 MAX_ATOMS = 24
 
-CRYSTAL_SYSTEMS = [
-    "Triclinic", "Monoclinic", "Orthorhombic",
-    "Tetragonal", "Trigonal", "Hexagonal", "Cubic",
-]
-CRYSTAL_SYSTEM_WEIGHTS = [0.25, 0.20, 0.15, 0.12, 0.08, 0.10, 0.10]
+def _classify_crystal_system(lattice: np.ndarray, tol: float = 0.01, ang_tol: float = 0.5) -> str:
+    """Derive crystal system from a 3x3 lattice matrix using lengths and angles."""
+    a_vec, b_vec, c_vec = lattice[0], lattice[1], lattice[2]
+    a = float(np.linalg.norm(a_vec))
+    b = float(np.linalg.norm(b_vec))
+    c = float(np.linalg.norm(c_vec))
+    alpha = float(np.degrees(np.arccos(np.clip(np.dot(b_vec, c_vec) / (b * c), -1, 1))))
+    beta  = float(np.degrees(np.arccos(np.clip(np.dot(a_vec, c_vec) / (a * c), -1, 1))))
+    gamma = float(np.degrees(np.arccos(np.clip(np.dot(a_vec, b_vec) / (a * b), -1, 1))))
+
+    def eq(x: float, y: float) -> bool:
+        return abs(x - y) < tol * max(x, y, 1.0)
+
+    def ang(x: float, target: float) -> bool:
+        return abs(x - target) < ang_tol
+
+    a90 = ang(alpha, 90)
+    b90 = ang(beta, 90)
+    g90 = ang(gamma, 90)
+    g120 = ang(gamma, 120)
+
+    ab = eq(a, b)
+    bc = eq(b, c)
+
+    if ab and bc and a90 and b90 and g90:
+        return "Cubic"
+    if ab and not bc and a90 and b90 and g120:
+        return "Hexagonal"
+    if ab and not bc and a90 and b90 and g90:
+        return "Tetragonal"
+    if ab and bc and a90 and b90 and not g90 and not g120:
+        return "Trigonal"
+    if not ab and not bc and a90 and b90 and g90:
+        return "Orthorhombic"
+    if a90 and not b90 and g90:
+        return "Monoclinic"
+    return "Triclinic"
+
+
+def _crystal_system_for_proto(el_a: str, el_b: str, proto_name: str) -> str:
+    """Build a prototype structure and classify its crystal system from lattice params."""
+    protos = _make_prototypes(el_a, el_b)
+    if proto_name not in protos:
+        return "Triclinic"
+    lat = np.array(protos[proto_name]["lattice"])
+    return _classify_crystal_system(lat)
 
 
 def _reduced_formula(n_a: int, n_b: int, el_a: str, el_b: str) -> str:
@@ -85,12 +130,47 @@ class MaceResultItem(CandidateItem):
     mace_stable: bool
 
 
+def _proto_crystal_systems(el_a: str, el_b: str) -> dict[str, str]:
+    """Build all prototypes once and classify each by lattice params."""
+    protos = _make_prototypes(el_a, el_b)
+    return {
+        name: _classify_crystal_system(np.array(p["lattice"]))
+        for name, p in protos.items()
+    }
+
+
+def _guess_prototype(x_b: float) -> str:
+    """Pick the best-matching prototype for a given x_B (must mirror frontend)."""
+    if x_b < 0.01 or x_b > 0.99:
+        return "CsCl_B2"
+    ratio = x_b / (1 - x_b)
+    if ratio > 4:
+        return "CaCu5_D2d_inv"
+    if ratio > 2.5:
+        return "Sn3Ni_D019"
+    if ratio > 1.8:
+        return "Au3Cu_L12"
+    if ratio > 1.2:
+        return "MoSi2_C11b"
+    if ratio > 0.8:
+        return "CsCl_B2"
+    if ratio > 0.55:
+        return "MoSi2_C11b"
+    if ratio > 0.4:
+        return "Cu3Au_L12"
+    if ratio > 0.25:
+        return "Ni3Sn_D019"
+    return "CaCu5_D2d"
+
+
 @app.post("/generate", response_model=List[CandidateItem])
 def generate(req: GenerateRequest):
     el_a, el_b = req.element_a, req.element_b
     target = max(req.n_candidates, 1)
     per_comp = max(1, target // len(COMPOSITIONS))
     rows: list[dict] = []
+
+    cs_map = _proto_crystal_systems(el_a, el_b)
 
     for n_a_fu, n_b_fu in COMPOSITIONS:
         is_pure = n_a_fu == 0 or n_b_fu == 0
@@ -120,7 +200,7 @@ def generate(req: GenerateRequest):
                 "formation_energy_eV_atom": round(fe, 4),
                 "e_above_hull_eV_atom": round(e_hull, 4),
                 "predicted_stable": e_hull < 0.025,
-                "crystal_system": RNG.choice(CRYSTAL_SYSTEMS, p=CRYSTAL_SYSTEM_WEIGHTS),
+                "crystal_system": cs_map[_guess_prototype(x_b)],
             })
 
             if len(rows) >= target:
@@ -147,7 +227,7 @@ def generate(req: GenerateRequest):
             "formation_energy_eV_atom": round(fe, 4),
             "e_above_hull_eV_atom": round(e_hull, 4),
             "predicted_stable": e_hull < 0.025,
-            "crystal_system": RNG.choice(CRYSTAL_SYSTEMS, p=CRYSTAL_SYSTEM_WEIGHTS),
+            "crystal_system": cs_map[_guess_prototype(x_b)],
         })
 
     result = sorted(rows[:target], key=lambda r: r["e_above_hull_eV_atom"])
@@ -384,6 +464,7 @@ class StructureResponse(BaseModel):
     prototype: str
     formula: str
     n_atoms: int
+    crystal_system: str
     lattice_matrix: list[list[float]]
     lattice_params: dict
     volume: float
@@ -400,7 +481,6 @@ class PrototypeListResponse(BaseModel):
 def get_structure(req: StructureRequest):
     protos = _make_prototypes(req.element_a, req.element_b)
     if req.prototype not in protos:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Unknown prototype: {req.prototype}")
 
     proto = protos[req.prototype]
@@ -439,6 +519,7 @@ def get_structure(req: StructureRequest):
         "prototype": req.prototype,
         "formula": formula,
         "n_atoms": len(species),
+        "crystal_system": _classify_crystal_system(lat),
         "lattice_matrix": lat.tolist(),
         "lattice_params": {
             "a": round(a_len, 4),
@@ -459,3 +540,97 @@ def get_structure(req: StructureRequest):
 def list_prototypes():
     protos = _make_prototypes("A", "B")
     return {"prototypes": list(protos.keys())}
+
+
+# ---------------------------------------------------------------------------
+# CIF-backed structure endpoint (real relaxed structures)
+# ---------------------------------------------------------------------------
+
+class StructureByIdxRequest(BaseModel):
+    system: str  # e.g. "Co-Bi"
+    idx: int
+
+
+def _find_relaxed_cif(system: str, idx: int) -> Path | None:
+    """Locate the relaxed CIF for a given hull-CSV row (e.g. Co-Bi #3)."""
+    relaxed_dir = MATTERGEN_DIR / system / "relaxed"
+    if not relaxed_dir.is_dir():
+        return None
+    matches = sorted(relaxed_dir.glob(f"{system}_{idx:03d}_*.cif"))
+    return matches[0] if matches else None
+
+
+def _classify_via_pymatgen(struct) -> str:
+    """Use spglib via pymatgen for crystal-system classification, falling back
+    to lattice-parameter heuristics if spglib isn't available."""
+    try:
+        from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+        cs = SpacegroupAnalyzer(struct, symprec=0.1).get_crystal_system()
+        return cs.capitalize() if cs else _classify_crystal_system(struct.lattice.matrix)
+    except Exception:
+        return _classify_crystal_system(np.asarray(struct.lattice.matrix))
+
+
+@app.post("/structure_by_idx", response_model=StructureResponse)
+def get_structure_by_idx(req: StructureByIdxRequest):
+    """Return the actual relaxed CIF structure for system={system}, idx={idx}.
+
+    This is what the 3D viewer should call for any candidate that came from a
+    *_mattersim_hull.csv row, so the rendered structure agrees with the
+    crystal_system label on the candidate row.
+    """
+    cif_path = _find_relaxed_cif(req.system, req.idx)
+    if cif_path is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No relaxed CIF found for {req.system} idx={req.idx}",
+        )
+
+    try:
+        from pymatgen.core import Structure
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"pymatgen not available on the server: {exc}",
+        )
+
+    struct = Structure.from_file(str(cif_path))
+    lat = np.asarray(struct.lattice.matrix)
+    a_vec, b_vec, c_vec = lat[0], lat[1], lat[2]
+    a_len = float(np.linalg.norm(a_vec))
+    b_len = float(np.linalg.norm(b_vec))
+    c_len = float(np.linalg.norm(c_vec))
+    alpha = float(np.degrees(np.arccos(
+        np.clip(np.dot(b_vec, c_vec) / (b_len * c_len), -1, 1)
+    )))
+    beta = float(np.degrees(np.arccos(
+        np.clip(np.dot(a_vec, c_vec) / (a_len * c_len), -1, 1)
+    )))
+    gamma = float(np.degrees(np.arccos(
+        np.clip(np.dot(a_vec, b_vec) / (a_len * b_len), -1, 1)
+    )))
+    volume = float(abs(np.dot(a_vec, np.cross(b_vec, c_vec))))
+
+    species = [str(site.specie) for site in struct]
+    frac = struct.frac_coords.tolist()
+    cart = struct.cart_coords.tolist()
+
+    return {
+        "prototype": cif_path.stem,  # e.g. "Co-Bi_003_CoBi"
+        "formula": struct.composition.reduced_formula,
+        "n_atoms": len(struct),
+        "crystal_system": _classify_via_pymatgen(struct),
+        "lattice_matrix": lat.tolist(),
+        "lattice_params": {
+            "a": round(a_len, 4),
+            "b": round(b_len, 4),
+            "c": round(c_len, 4),
+            "alpha": round(alpha, 2),
+            "beta": round(beta, 2),
+            "gamma": round(gamma, 2),
+        },
+        "volume": round(volume, 4),
+        "species": species,
+        "frac_coords": frac,
+        "cart_coords": cart,
+    }

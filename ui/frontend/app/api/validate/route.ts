@@ -28,11 +28,13 @@ async function loadMaceResultsFromCSV(elementA: string, elementB: string) {
     try {
       const csv = await readFile(join(DATA_DIR, filename), "utf-8");
       const rows = parseCSV(csv);
+      const system = filename.replace(/_mattersim_hull\.csv$/, "");
       return rows.map((row) => {
         const formE = parseFloat(row.e_form_eV_atom);
         const ePerAtom = parseFloat(row.e_per_atom_eV);
         const eAboveHull = parseFloat(row.e_above_hull_eV_atom);
         const onHull = row.on_hull === "True";
+        const parsedIdx = parseInt(row.idx, 10);
 
         return {
           composition: row.formula,
@@ -42,7 +44,9 @@ async function loadMaceResultsFromCSV(elementA: string, elementB: string) {
           formation_energy_eV_atom: formE,
           e_above_hull_eV_atom: eAboveHull,
           predicted_stable: onHull,
-          crystal_system: "Unknown",
+          crystal_system: row.crystal_system || "Unknown",
+          idx: Number.isFinite(parsedIdx) ? parsedIdx : undefined,
+          system,
           mace_energy_eV_atom: ePerAtom,
           mace_e_above_hull_eV_atom: eAboveHull,
           mace_stable: onHull,

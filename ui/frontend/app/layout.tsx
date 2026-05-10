@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Matter of Fact",
   description:
-    "Discover stable crystal structures with machine-learned interatomic potentials.",
+    "Discover stable crystal structures with machine-learned interatomic potentials for microelectronics.",
 };
 
 export const viewport: Viewport = {

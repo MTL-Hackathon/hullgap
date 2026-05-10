@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
 import { Loader2 } from "lucide-react";
-import { fetchStructure } from "@/lib/api-client";
-import type { StructureData } from "@/lib/types";
+import { fetchStructure, fetchStructureByIdx } from "@/lib/api-client";
+import type { CandidateResult, StructureData } from "@/lib/types";
 
 const subscribeNoop = () => () => {};
 const getClientSnapshot = () => true;
@@ -105,50 +105,52 @@ function cellCorners(
   );
 }
 
-function supercellOffsets(
-  latticeMatrix: [number, number, number][],
-): [number, number, number][] {
-  const [a, b, c] = latticeMatrix;
-  const offsets: [number, number, number][] = [];
-  for (let i = 0; i < 2; i++)
-    for (let j = 0; j < 2; j++)
-      for (let k = 0; k < 2; k++)
-        offsets.push([
-          i * a[0] + j * b[0] + k * c[0],
-          i * a[1] + j * b[1] + k * c[1],
-          i * a[2] + j * b[2] + k * c[2],
-        ]);
-  return offsets;
+/** Wrap a fractional coordinate into [0, 1). Relaxation can leave frac
+ *  components slightly outside that range; without wrapping, those atoms
+ *  appear floating outside the unit-cell wireframe. */
+function wrapFrac(x: number): number {
+  const w = x - Math.floor(x);
+  return w === 1 ? 0 : w;
 }
 
+/** For an atom whose (wrapped) fractional coords sit on a cell face/edge/
+ *  corner, return the periodic-image fractional coords on the opposite
+ *  face/edge/corner so the boundary of the unit cell looks continuous.
+ *  Atoms strictly inside the cell yield only themselves. */
+function periodicImages(
+  fx: number,
+  fy: number,
+  fz: number,
+  eps: number,
+): [number, number, number][] {
+  const xs = [fx];
+  const ys = [fy];
+  const zs = [fz];
+  if (fx < eps) xs.push(fx + 1);
+  else if (fx > 1 - eps) xs.push(fx - 1);
+  if (fy < eps) ys.push(fy + 1);
+  else if (fy > 1 - eps) ys.push(fy - 1);
+  if (fz < eps) zs.push(fz + 1);
+  else if (fz > 1 - eps) zs.push(fz - 1);
+  const out: [number, number, number][] = [];
+  for (const x of xs) for (const y of ys) for (const z of zs) out.push([x, y, z]);
+  return out;
+}
+
+/** Draw the unit cell's wireframe (12 edges). */
 function SupercellEdges({ latticeMatrix }: { latticeMatrix: [number, number, number][] }) {
-  const allEdges = useMemo(() => {
-    const offsets = supercellOffsets(latticeMatrix);
-    const result: { points: [[number, number, number], [number, number, number]]; primary: boolean }[] = [];
-    offsets.forEach((o) => {
-      const isPrimary = o[0] === 0 && o[1] === 0 && o[2] === 0;
-      const corners = cellCorners(latticeMatrix, o);
-      EDGE_PAIRS.forEach(([i, j]) => {
-        result.push({
-          points: [corners[i], corners[j]],
-          primary: isPrimary,
-        });
-      });
-    });
-    return result;
+  const edges = useMemo(() => {
+    const corners = cellCorners(latticeMatrix);
+    return EDGE_PAIRS.map(([i, j]) => [corners[i], corners[j]] as [
+      [number, number, number],
+      [number, number, number],
+    ]);
   }, [latticeMatrix]);
 
   return (
     <>
-      {allEdges.map((edge, i) => (
-        <Line
-          key={i}
-          points={edge.points}
-          color={edge.primary ? "#e03030" : "#e03030"}
-          lineWidth={edge.primary ? 2 : 1}
-          opacity={edge.primary ? 1 : 0.2}
-          transparent
-        />
+      {edges.map((points, i) => (
+        <Line key={i} points={points} color="#e03030" lineWidth={2} />
       ))}
     </>
   );
@@ -156,65 +158,79 @@ function SupercellEdges({ latticeMatrix }: { latticeMatrix: [number, number, num
 
 function Atoms({
   species,
-  cartCoords,
+  fracCoords,
   latticeMatrix,
 }: {
   species: string[];
-  cartCoords: [number, number, number][];
+  fracCoords: [number, number, number][];
   latticeMatrix: [number, number, number][];
 }) {
   const uniqueSpecies = useMemo(() => [...new Set(species)], [species]);
-  const offsets = useMemo(() => supercellOffsets(latticeMatrix), [latticeMatrix]);
+
+  // Build the list of atoms to render: each atom is wrapped into [0, 1) and
+  // duplicated onto the opposite face/edge/corner if it lies on a cell
+  // boundary, so the viewer matches what the unit-cell wireframe encloses.
+  const renderAtoms = useMemo(() => {
+    const [aVec, bVec, cVec] = latticeMatrix;
+    const eps = 0.02;
+    const out: { species: string; pos: [number, number, number] }[] = [];
+    fracCoords.forEach((f, i) => {
+      const wx = wrapFrac(f[0]);
+      const wy = wrapFrac(f[1]);
+      const wz = wrapFrac(f[2]);
+      for (const [ix, iy, iz] of periodicImages(wx, wy, wz, eps)) {
+        out.push({
+          species: species[i],
+          pos: [
+            ix * aVec[0] + iy * bVec[0] + iz * cVec[0],
+            ix * aVec[1] + iy * bVec[1] + iz * cVec[1],
+            ix * aVec[2] + iy * bVec[2] + iz * cVec[2],
+          ],
+        });
+      }
+    });
+    return out;
+  }, [species, fracCoords, latticeMatrix]);
 
   return (
     <>
       {uniqueSpecies.map((sym) => {
         const color = ELEMENT_COLORS[sym] || "#888888";
         const radius = ELEMENT_RADII[sym] || 0.3;
-        const indices = species
-          .map((s, i) => (s === sym ? i : -1))
-          .filter((i) => i >= 0);
-
-        return offsets.map((o, oi) => {
-          const isPrimary = o[0] === 0 && o[1] === 0 && o[2] === 0;
-          return indices.map((idx) => (
-            <mesh
-              key={`${oi}-${idx}`}
-              position={[
-                cartCoords[idx][0] + o[0],
-                cartCoords[idx][1] + o[1],
-                cartCoords[idx][2] + o[2],
-              ]}
-            >
+        return renderAtoms
+          .map((atom, ai) => (atom.species === sym ? { atom, ai } : null))
+          .filter((x): x is { atom: { species: string; pos: [number, number, number] }; ai: number } => x !== null)
+          .map(({ atom, ai }) => (
+            <mesh key={`${sym}-${ai}`} position={atom.pos}>
               <sphereGeometry args={[radius, 24, 24]} />
               <meshStandardMaterial
                 color={color}
                 roughness={0.4}
                 metalness={0.3}
-                transparent={!isPrimary}
-                opacity={isPrimary ? 1 : 0.3}
               />
             </mesh>
           ));
-        });
       })}
     </>
   );
 }
 
 export function StructureScene({ structure }: { structure: StructureData }) {
+  // Centre on the geometric centre of the *primary* unit cell — i.e.
+  // (a+b+c)/2, not (a+b+c). The previous code used the far corner, which
+  // pushed the unit cell into one octant of the view.
   const center = useMemo(() => {
     const [a, b, c] = structure.lattice_matrix;
     return [
-      a[0] + b[0] + c[0],
-      a[1] + b[1] + c[1],
-      a[2] + b[2] + c[2],
+      (a[0] + b[0] + c[0]) / 2,
+      (a[1] + b[1] + c[1]) / 2,
+      (a[2] + b[2] + c[2]) / 2,
     ] as [number, number, number];
   }, [structure.lattice_matrix]);
 
   const cameraDistance = useMemo(() => {
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 3.0;
+    return Math.max(a, b, c) * 1.8;
   }, [structure.lattice_params]);
 
   return (
@@ -226,7 +242,7 @@ export function StructureScene({ structure }: { structure: StructureData }) {
         <SupercellEdges latticeMatrix={structure.lattice_matrix} />
         <Atoms
           species={structure.species}
-          cartCoords={structure.cart_coords}
+          fracCoords={structure.frac_coords}
           latticeMatrix={structure.lattice_matrix}
         />
       </group>
@@ -234,7 +250,7 @@ export function StructureScene({ structure }: { structure: StructureData }) {
         makeDefault
         target={[0, 0, 0]}
         minDistance={cameraDistance * 0.3}
-        maxDistance={cameraDistance * 3}
+        maxDistance={cameraDistance * 4}
       />
     </>
   );
@@ -243,61 +259,60 @@ export function StructureScene({ structure }: { structure: StructureData }) {
 interface CrystalViewerProps {
   elementA: string;
   elementB: string;
+  candidate: CandidateResult;
 }
 
-export function CrystalViewer({ elementA, elementB }: CrystalViewerProps) {
+export function CrystalViewer({ elementA, elementB, candidate }: CrystalViewerProps) {
   const mounted = useSyncExternalStore(subscribeNoop, getClientSnapshot, getServerSnapshot);
-  const [selectedProto, setSelectedProto] = useState(PROTOTYPES[0]);
   const [structure, setStructure] = useState<StructureData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadStructure = useCallback(async (proto: string) => {
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
-    try {
-      const data = await fetchStructure(elementA, elementB, proto);
-      setStructure(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load structure");
-    } finally {
-      setLoading(false);
-    }
-  }, [elementA, elementB]);
 
-  useEffect(() => {
-    loadStructure(selectedProto);
-  }, [selectedProto, loadStructure]);
+    // Prefer the actual relaxed CIF when the candidate carries a CSV row
+    // identifier — that way the rendered structure matches the row's
+    // crystal_system label. Fall back to the synthetic prototype only when
+    // we have no idx/system to look up.
+    const hasRealStructure =
+      typeof candidate.idx === "number" &&
+      Number.isFinite(candidate.idx) &&
+      !!candidate.system;
+
+    const fetchPromise = hasRealStructure
+      ? fetchStructureByIdx(candidate.system as string, candidate.idx as number)
+          .catch(() =>
+            // CIF missing on disk — degrade gracefully to the prototype guess
+            fetchStructure(elementA, elementB, guessPrototype(candidate.x_B))
+          )
+      : fetchStructure(elementA, elementB, guessPrototype(candidate.x_B));
+
+    fetchPromise
+      .then((data) => { if (!cancelled) setStructure(data); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load structure"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [elementA, elementB, candidate]);
 
   const cameraDistance = useMemo(() => {
     if (!structure) return 10;
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 3.0;
+    return Math.max(a, b, c) * 1.8;
   }, [structure]);
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] sm:p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-              Crystal Structure Viewer
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Interactive 3D visualization of {elementA}&ndash;{elementB} prototype structures
-            </p>
-          </div>
-          <label className="text-sm text-slate-600">
-            <select
-              value={selectedProto}
-              onChange={(e) => setSelectedProto(e.target.value)}
-              className="h-9 rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)]"
-            >
-              {PROTOTYPES.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </label>
+        <div>
+          <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
+            Structure Preview
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {candidate.formula} &mdash; {candidate.crystal_system}
+          </p>
         </div>
 
         {error && (
@@ -324,42 +339,64 @@ export function CrystalViewer({ elementA, elementB }: CrystalViewerProps) {
         </div>
       </div>
 
-      {structure && (
-        <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] sm:p-6">
-          <h3 className="text-sm font-semibold tracking-[-0.01em] text-[var(--foreground)]">
-            Structure Information
-          </h3>
-          <div className="mt-3 grid gap-x-8 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
-            <div>
-              <span className="font-medium text-[var(--foreground)]">Prototype:</span>{" "}
-              {structure.prototype}
-            </div>
-            <div>
-              <span className="font-medium text-[var(--foreground)]">Formula:</span>{" "}
-              {structure.formula}
-            </div>
-            <div>
-              <span className="font-medium text-[var(--foreground)]">Atoms:</span>{" "}
-              {structure.n_atoms}
-            </div>
-            <div>
-              <span className="font-medium text-[var(--foreground)]">Volume:</span>{" "}
-              {structure.volume.toFixed(2)} &#x212B;&sup3;
-            </div>
-            <div className="sm:col-span-2">
-              <span className="font-medium text-[var(--foreground)]">Lattice:</span>{" "}
-              a={structure.lattice_params.a.toFixed(3)} &#x212B;,{" "}
-              b={structure.lattice_params.b.toFixed(3)} &#x212B;,{" "}
-              c={structure.lattice_params.c.toFixed(3)} &#x212B;
-            </div>
-            <div className="sm:col-span-2">
-              <span className="font-medium text-[var(--foreground)]">Angles:</span>{" "}
-              &alpha;={structure.lattice_params.alpha.toFixed(1)}&deg;,{" "}
-              &beta;={structure.lattice_params.beta.toFixed(1)}&deg;,{" "}
-              &gamma;={structure.lattice_params.gamma.toFixed(1)}&deg;
-            </div>
+      <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] sm:p-6">
+        <h3 className="text-sm font-semibold tracking-[-0.01em] text-[var(--foreground)]">
+          Structure Information
+        </h3>
+        <div className="mt-3 grid gap-x-8 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
+          <div>
+            <span className="font-medium text-[var(--foreground)]">Formula:</span>{" "}
+            {candidate.formula}
           </div>
+          <div>
+            <span className="font-medium text-[var(--foreground)]">Atoms:</span>{" "}
+            {candidate.n_atoms}
+          </div>
+          <div>
+            <span className="font-medium text-[var(--foreground)]">Formation energy:</span>{" "}
+            {candidate.formation_energy_eV_atom.toFixed(4)} eV/atom
+          </div>
+          <div>
+            <span className="font-medium text-[var(--foreground)]">E above hull:</span>{" "}
+            {candidate.e_above_hull_eV_atom.toFixed(4)} eV/atom
+          </div>
+          <div>
+            <span className="font-medium text-[var(--foreground)]">Predicted stable:</span>{" "}
+            <span className={candidate.predicted_stable ? "text-emerald-600 font-semibold" : "text-slate-400"}>
+              {candidate.predicted_stable ? "Yes" : "No"}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium text-[var(--foreground)]">Crystal system:</span>{" "}
+            {candidate.crystal_system}
+          </div>
+          {structure && (
+            <>
+              <div>
+                <span className="font-medium text-[var(--foreground)]">Prototype:</span>{" "}
+                {structure.prototype}
+              </div>
+              <div>
+                <span className="font-medium text-[var(--foreground)]">Volume:</span>{" "}
+                {structure.volume.toFixed(2)} &#x212B;&sup3;
+              </div>
+              <div className="sm:col-span-2">
+                <span className="font-medium text-[var(--foreground)]">Lattice:</span>{" "}
+                a={structure.lattice_params.a.toFixed(3)} &#x212B;,{" "}
+                b={structure.lattice_params.b.toFixed(3)} &#x212B;,{" "}
+                c={structure.lattice_params.c.toFixed(3)} &#x212B;
+              </div>
+              <div className="sm:col-span-2">
+                <span className="font-medium text-[var(--foreground)]">Angles:</span>{" "}
+                &alpha;={structure.lattice_params.alpha.toFixed(1)}&deg;,{" "}
+                &beta;={structure.lattice_params.beta.toFixed(1)}&deg;,{" "}
+                &gamma;={structure.lattice_params.gamma.toFixed(1)}&deg;
+              </div>
+            </>
+          )}
+        </div>
 
+        {structure && (
           <div className="mt-4">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Legend
@@ -380,8 +417,8 @@ export function CrystalViewer({ elementA, elementB }: CrystalViewerProps) {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

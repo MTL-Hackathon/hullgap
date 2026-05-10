@@ -7,6 +7,10 @@ export interface CandidateResult {
   e_above_hull_eV_atom: number;
   predicted_stable: boolean;
   crystal_system: string;
+  /** Optional row index in the source hull CSV — lets the viewer load the real CIF. */
+  idx?: number;
+  /** Chemical system the candidate came from (e.g. "Co-Bi"). */
+  system?: string;
 }
 
 export interface MaceResult extends CandidateResult {
@@ -48,6 +52,7 @@ export interface StructureData {
   prototype: string;
   formula: string;
   n_atoms: number;
+  crystal_system: string;
   lattice_matrix: [number, number, number][];
   lattice_params: {
     a: number;

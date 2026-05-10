@@ -48,6 +48,7 @@ export function Workspace() {
 
   const [mpPhases, setMpPhases] = useState<MpPhase[]>([]);
   const [viewerVisited, setViewerVisited] = useState(false);
+  const [viewCandidate, setViewCandidate] = useState<CandidateResult | null>(null);
 
   const [assembled, setAssembled] = useState(false);
   const [canvasRevealed, setCanvasRevealed] = useState(false);
@@ -101,23 +102,38 @@ export function Workspace() {
   }, [step, candidates, maceResults]);
 
   const scrollToPeriodicTable = useCallback(() => {
-    if (!assembled) setAssembled(true);
     const el = document.getElementById("periodic-table");
     if (!el) return;
     const top = el.getBoundingClientRect().top + window.scrollY - 120;
     window.scrollTo({ top, behavior: "smooth" });
-  }, [assembled]);
+  }, []);
 
   useEffect(() => {
-    const onScroll = () => {
-      const threshold = assembled ? 80 : 200;
-      const shouldAssemble = window.scrollY > threshold;
-      if (shouldAssemble && !assembled) setAssembled(true);
-      if (!shouldAssemble && assembled) setAssembled(false);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [assembled]);
+    // Latch `assembled` to true on first periodic-table visibility (or as
+    // soon as candidates exist) and never flip back. The fly target is the
+    // canvas's bounding rect, so firing before the section is visible aims
+    // at off-screen coordinates; conversely, flipping back to false later
+    // triggers disassembly and replays the screensaver on top of the
+    // workspace, which is the buggy behaviour.
+    if (assembled) return;
+    if (candidates) {
+      setAssembled(true);
+      return;
+    }
+    const target = document.getElementById("periodic-table");
+    if (!target) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setAssembled(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [assembled, candidates]);
 
   const handleOverlayLanded = useCallback(() => {
     setCanvasRevealed(true);
@@ -181,6 +197,7 @@ export function Workspace() {
     setCrystalSystemFilter(new Set());
     setError(null);
     setViewerVisited(false);
+    setViewCandidate(null);
   }, []);
 
   const toggleSelect = useCallback((index: number) => {
@@ -586,8 +603,13 @@ export function Workspace() {
                     <button
                       type="button"
                       onClick={() => {
-                        setViewerVisited(true);
-                        setStep("viewer");
+                        if (!maceResults) return;
+                        const first = maceResults.find((r) => r.mace_stable) ?? maceResults[0];
+                        if (first) {
+                          setViewCandidate(first);
+                          setViewerVisited(true);
+                          setStep("viewer");
+                        }
                       }}
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--foreground)] shadow-sm transition hover:border-[var(--accent)]/35 hover:bg-[var(--accent-dim)]"
                     >
@@ -609,8 +631,8 @@ export function Workspace() {
               ref={(el) => { slideRefs.current[2] = el; }}
               className="w-full min-w-full shrink-0"
             >
-              {viewerVisited && (
-                <CrystalViewer elementA={elementA} elementB={elementB} />
+              {viewerVisited && viewCandidate && (
+                <CrystalViewer elementA={elementA} elementB={elementB} candidate={viewCandidate} />
               )}
             </div>
           </div>

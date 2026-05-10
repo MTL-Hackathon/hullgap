@@ -27,7 +27,7 @@ export function HeroSection({ onGetStarted }: Props) {
           </span>
         </h1>
         <p className="mt-5 text-[18px] font-light tracking-[-0.01em] text-slate-500">
-          Discover stable crystal structures with machine-learned interatomic potentials.
+          Discover stable crystal structures with machine-learned interatomic potentials for microelectronics.
         </p>
         <button
           type="button"
