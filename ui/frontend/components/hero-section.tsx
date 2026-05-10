@@ -15,7 +15,7 @@ export function HeroSection({ onGetStarted }: Props) {
   return (
     <section
       ref={heroRef}
-      className="relative flex min-h-[calc(100vh-49px)] flex-col items-center justify-center overflow-hidden px-4 py-20 text-center"
+      className="relative flex min-h-[calc(100vh-49px)] flex-col items-center justify-center overflow-hidden px-4 pb-10 pt-20 text-center"
       onMouseMove={(e) => {
         if (!heroRef.current) return;
         const r = heroRef.current.getBoundingClientRect();

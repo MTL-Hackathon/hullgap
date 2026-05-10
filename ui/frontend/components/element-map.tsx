@@ -220,7 +220,7 @@ const LEGEND_GROUPS: Cat[] = [
 const N_COLS    = 18;
 const PAD       = 16;
 const GAP       = 2;
-const SCATTER_H = 780;
+const SCATTER_H = 560;
 const LERP      = 0.12;
 const INACTIVE_ALPHA = 0.15;
 
@@ -349,7 +349,12 @@ function computeScatter(
 }
 
 // ─── Component ──────────────────────────────────────────────────────────
-export function ElementMap() {
+interface ElementMapProps {
+  onGenerate?: (elA: string, elB: string, n: number) => void;
+  isGenerating?: boolean;
+}
+
+export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   const wrapRef    = useRef<HTMLDivElement>(null);
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -373,6 +378,7 @@ export function ElementMap() {
   const [selectedA, setSelectedA] = useState<number | null>(null);
   const [selectedB, setSelectedB] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [nCandidates, setNCandidates] = useState(50);
 
   // MP phase data
   interface MpPhase {
@@ -966,7 +972,7 @@ export function ElementMap() {
   const hoveredEl = hoveredIdx !== null ? ELEMENTS[hoveredIdx] : null;
 
   return (
-    <section id="periodic-table" className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <section id="periodic-table" className="mx-auto max-w-6xl px-4 pb-10 pt-4 sm:px-6">
       <div className="mb-4">
         <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
           Element Space
@@ -1222,14 +1228,35 @@ export function ElementMap() {
             </div>
           )}
 
-          <button
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714a2.25 2.25 0 0 0 .659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 0 1-1.59.659H9.06a2.25 2.25 0 0 1-1.591-.659L5 14.5m14 0H5" />
-            </svg>
-            Generate Crystal Structures for {elA.s}–{elB.s}
-          </button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              Candidates
+              <input
+                type="number"
+                min={10}
+                max={200}
+                step={10}
+                value={nCandidates}
+                onChange={(e) => setNCandidates(Number(e.target.value) || 50)}
+                className="h-10 w-20 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 tabular-nums"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={isGenerating}
+              onClick={() => onGenerate?.(elA.s, elB.s, nCandidates)}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isGenerating ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" /></svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714a2.25 2.25 0 0 0 .659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a2.25 2.25 0 0 1-1.59.659H9.06a2.25 2.25 0 0 1-1.591-.659L5 14.5m14 0H5" />
+                </svg>
+              )}
+              {isGenerating ? "Generating…" : `Generate New Crystal Structure Candidates for ${elA.s}–${elB.s}`}
+            </button>
+          </div>
         </div>
       )}
 

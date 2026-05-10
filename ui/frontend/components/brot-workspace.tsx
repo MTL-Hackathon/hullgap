@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowLeft, Loader2, Search, Download, FlaskConical, Eye } from "lucide-react";
+import { ArrowLeft, Loader2, Search, Download, Eye } from "lucide-react";
 import { generateCandidates, validateWithMace } from "@/lib/api-client";
 import type { CandidateResult, MaceResult } from "@/lib/types";
 import { HeroSection } from "./hero-section";
@@ -18,28 +18,10 @@ import { ResultsTable } from "./results-table";
 import { HullChart } from "./hull-chart";
 import { CrystalViewer } from "./crystal-viewer";
 
-const ELEMENTS = [
-  "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
-  "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar",
-  "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
-  "Ga", "Ge", "As", "Se", "Br", "Kr",
-  "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
-  "In", "Sn", "Sb", "Te", "I", "Xe",
-  "Cs", "Ba", "La", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
-  "Tl", "Pb", "Bi", "Po",
-];
-
-const PRESETS = [
-  { label: "Co + Bi (50)", elA: "Co", elB: "Bi", n: 50 },
-  { label: "Fe + Ti (100)", elA: "Fe", elB: "Ti", n: 100 },
-  { label: "Ni + Al (80)", elA: "Ni", elB: "Al", n: 80 },
-];
-
 export function BrotWorkspace() {
   const [elementA, setElementA] = useState("Co");
   const [elementB, setElementB] = useState("Bi");
-  const [nCandidates, setNCandidates] = useState(50);
-  const [step, setStep] = useState<Step>("input");
+  const [step, setStep] = useState<Step>("candidates");
   const [candidates, setCandidates] = useState<CandidateResult[] | null>(null);
   const [maceResults, setMaceResults] = useState<MaceResult[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -52,14 +34,12 @@ export function BrotWorkspace() {
   const [viewerVisited, setViewerVisited] = useState(false);
 
   const mainRef = useRef<HTMLElement>(null);
-  const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null]);
+  const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
 
-  const stepIndex = step === "input" ? 0 : step === "candidates" ? 1 : step === "validation" ? 2 : 3;
-  const canGenerate = elementA !== elementB;
+  const stepIndex = step === "candidates" ? 0 : step === "validation" ? 1 : 2;
 
   const goBack = useCallback(() => {
-    if (step === "candidates") setStep("input");
-    else if (step === "validation") setStep("candidates");
+    if (step === "validation") setStep("candidates");
     else if (step === "viewer") setStep("validation");
   }, [step]);
 
@@ -70,7 +50,9 @@ export function BrotWorkspace() {
     window.scrollTo({ top, behavior: "smooth" });
   }, []);
 
-  const runGenerate = useCallback(async () => {
+  const runGenerate = useCallback(async (elA: string, elB: string, n: number) => {
+    setElementA(elA);
+    setElementB(elB);
     setError(null);
     setGenLoading(true);
     setCandidates(null);
@@ -78,7 +60,7 @@ export function BrotWorkspace() {
     setSelected(new Set());
     setCrystalSystemFilter(new Set());
     try {
-      const res = await generateCandidates(elementA, elementB, nCandidates);
+      const res = await generateCandidates(elA, elB, n);
       setCandidates(res);
       const stableIndices = new Set<number>();
       res.forEach((c, i) => {
@@ -91,7 +73,7 @@ export function BrotWorkspace() {
     } finally {
       setGenLoading(false);
     }
-  }, [elementA, elementB, nCandidates]);
+  }, []);
 
   const runValidation = useCallback(async () => {
     if (!candidates) return;
@@ -111,7 +93,7 @@ export function BrotWorkspace() {
   }, [candidates, selected]);
 
   const reset = useCallback(() => {
-    setStep("input");
+    setStep("candidates");
     setCandidates(null);
     setMaceResults(null);
     setSelected(new Set());
@@ -227,11 +209,10 @@ export function BrotWorkspace() {
   }, [stepIndex, candidates, maceResults]);
 
   useEffect(() => {
-    if (stepIndex === 0) return;
     if (!mainRef.current) return;
     const top = mainRef.current.getBoundingClientRect().top + window.scrollY - 56;
     window.scrollTo({ top, behavior: "smooth" });
-  }, [stepIndex]);
+  }, [stepIndex, candidates]);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-white text-[var(--foreground)]">
@@ -261,13 +242,34 @@ export function BrotWorkspace() {
       {/* Hero */}
       <HeroSection onGetStarted={scrollToPeriodicTable} />
 
-      {/* Element map */}
-      <ElementMap />
+      {/* Step tracker — always visible above periodic table */}
+      <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+        <StepTracker
+          step={step}
+          stepIndex={stepIndex}
+          canOpenCandidates={Boolean(candidates)}
+          canOpenValidation={Boolean(maceResults)}
+          canOpenViewer={viewerVisited}
+          onOpenCandidates={() => {
+            if (candidates) setStep("candidates");
+          }}
+          onOpenValidation={() => {
+            if (maceResults) setStep("validation");
+          }}
+          onOpenViewer={() => {
+            if (viewerVisited) setStep("viewer");
+          }}
+        />
+      </div>
 
-      {/* Main workspace */}
+      {/* Element map */}
+      <ElementMap onGenerate={runGenerate} isGenerating={genLoading} />
+
+      {/* Main workspace — only shown once candidates exist */}
+      {candidates && (
       <main ref={mainRef} className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6">
         <div className="relative">
-          {step !== "input" && (
+          {step !== "candidates" && (
             <button
               type="button"
               onClick={goBack}
@@ -278,23 +280,6 @@ export function BrotWorkspace() {
               Back
             </button>
           )}
-          <StepTracker
-            step={step}
-            stepIndex={stepIndex}
-            canOpenCandidates={Boolean(candidates)}
-            canOpenValidation={Boolean(maceResults)}
-            canOpenViewer={viewerVisited}
-            onOpenInput={() => setStep("input")}
-            onOpenCandidates={() => {
-              if (candidates) setStep("candidates");
-            }}
-            onOpenValidation={() => {
-              if (maceResults) setStep("validation");
-            }}
-            onOpenViewer={() => {
-              if (viewerVisited) setStep("viewer");
-            }}
-          />
         </div>
 
         {/* Sliding panels */}
@@ -306,119 +291,9 @@ export function BrotWorkspace() {
             className="flex items-start transition-transform duration-500 ease-in-out will-change-transform"
             style={{ transform: `translateX(-${stepIndex * 100}%)` }}
           >
-            {/* Step 1: Element Selection */}
+            {/* Step 1: Candidate Generation Results */}
             <div
               ref={(el) => { slideRefs.current[0] = el; }}
-              className="w-full min-w-full shrink-0"
-            >
-              <div className="w-full rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow)] sm:p-6">
-                <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-                  Select elements & candidates
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Choose two elements and the number of candidate crystal structures to generate.
-                </p>
-
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <label className="text-sm text-slate-600">
-                    Element A
-                    <select
-                      value={elementA}
-                      onChange={(e) => setElementA(e.target.value)}
-                      className="mt-1 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)]"
-                    >
-                      {ELEMENTS.map((el) => (
-                        <option key={el} value={el}>{el}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm text-slate-600">
-                    Element B
-                    <select
-                      value={elementB}
-                      onChange={(e) => setElementB(e.target.value)}
-                      className="mt-1 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)]"
-                    >
-                      {ELEMENTS.map((el) => (
-                        <option key={el} value={el}>{el}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm text-slate-600">
-                    Number of candidates
-                    <input
-                      type="number"
-                      min={10}
-                      max={200}
-                      step={10}
-                      value={nCandidates}
-                      onChange={(e) => setNCandidates(Number(e.target.value) || 50)}
-                      className="mt-1 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)]"
-                    />
-                  </label>
-                </div>
-
-                {elementA === elementB && (
-                  <p className="mt-3 text-sm text-amber-600">
-                    Please choose two different elements.
-                  </p>
-                )}
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="w-full text-xs font-medium text-slate-400">
-                    Example presets
-                  </span>
-                  {PRESETS.map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => {
-                        setElementA(p.elA);
-                        setElementB(p.elB);
-                        setNCandidates(p.n);
-                      }}
-                      className="rounded-full border border-[var(--border)] bg-[var(--input-bg)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--accent)]/35 hover:bg-[var(--accent-dim)]"
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={!canGenerate || genLoading}
-                    onClick={runGenerate}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/20 transition hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {genLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      <FlaskConical className="h-4 w-4" aria-hidden />
-                    )}
-                    Generate Candidates
-                  </button>
-                  {(candidates || maceResults) && (
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className="text-sm font-medium text-slate-400 underline-offset-4 hover:text-[var(--foreground)] hover:underline"
-                    >
-                      Start over
-                    </button>
-                  )}
-                </div>
-              </div>
-              {error && step === "input" && (
-                <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                  {error}
-                </div>
-              )}
-            </div>
-
-            {/* Step 2: Candidate Generation Results */}
-            <div
-              ref={(el) => { slideRefs.current[1] = el; }}
               className="w-full min-w-full shrink-0"
             >
               {candidates && (
@@ -528,9 +403,9 @@ export function BrotWorkspace() {
               )}
             </div>
 
-            {/* Step 3: MACE Validation Results */}
+            {/* Step 2: MACE Validation Results */}
             <div
-              ref={(el) => { slideRefs.current[2] = el; }}
+              ref={(el) => { slideRefs.current[1] = el; }}
               className="w-full min-w-full shrink-0"
             >
               {maceResults && (
@@ -598,9 +473,9 @@ export function BrotWorkspace() {
               )}
             </div>
 
-            {/* Step 4: Crystal Viewer */}
+            {/* Step 3: Crystal Viewer */}
             <div
-              ref={(el) => { slideRefs.current[3] = el; }}
+              ref={(el) => { slideRefs.current[2] = el; }}
               className="w-full min-w-full shrink-0"
             >
               {viewerVisited && (
@@ -610,6 +485,7 @@ export function BrotWorkspace() {
           </div>
         </div>
       </main>
+      )}
 
       {/* Footer */}
       <footer className="relative mt-16 border-t border-slate-100 py-8 text-center text-xs text-slate-400">
