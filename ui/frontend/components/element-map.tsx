@@ -379,6 +379,8 @@ export function ElementMap() {
     id: string; formula: string; spacegroup: string; crystal_system: string;
     e_above_hull: number; formation_energy: number; density: number;
     n_sites: number; volume: number; is_stable: boolean;
+    a: number | null; b: number | null; c: number | null;
+    alpha: number | null; beta: number | null; gamma: number | null;
   }
   const [mpPhases, setMpPhases]     = useState<MpPhase[] | null>(null);
   const [mpLoading, setMpLoading]   = useState(false);
@@ -425,7 +427,7 @@ export function ElementMap() {
     return "grid";
   }
 
-  function opaTarget(el: El, i: number, m: "grid"|"scatter"|"compound"): number {
+  function opaTarget(el: El, _i: number, m: "grid"|"scatter"|"compound"): number {
     if (m === "compound" || m === "scatter") return el.relevant ? 1.0 : 0;
     return el.relevant ? 1.0 : INACTIVE_ALPHA;
   }
@@ -449,27 +451,14 @@ export function ElementMap() {
 
     ctx.clearRect(0, 0, w, h);
 
-    // ── Radial EN-compatibility background (scatter / compound) ─────
-    if ((m === "scatter" || m === "compound") && selA !== null) {
+    // ── Radial EN-compatibility background (scatter only) ──────────
+    if (m === "scatter" && selA !== null) {
       const anchorPos = posRef.current[selA];
       if (anchorPos) {
-        const maxRBg = Math.max(w, h);
         const enScale = enScaleRef.current;
         const maxR = Math.min(w / 2 - cs, h / 2 - cs);
         const aR = scatterR(ELEMENTS[selA], cs);
         const minR = Math.max(aR * 2 + 20, 80);
-
-        const grad = ctx.createRadialGradient(
-          anchorPos.x, anchorPos.y, minR * 0.5,
-          anchorPos.x, anchorPos.y, maxRBg,
-        );
-        grad.addColorStop(0, "rgba(0,0,0,0)");
-        grad.addColorStop(0.12, "rgba(0,0,0,0)");
-        grad.addColorStop(0.35, "rgba(0,0,0,0.018)");
-        grad.addColorStop(0.6,  "rgba(0,0,0,0.04)");
-        grad.addColorStop(1,    "rgba(0,0,0,0.07)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
 
         // EN ring guides at meaningful intervals
         ctx.save();
@@ -857,7 +846,7 @@ export function ElementMap() {
         fetchMpPhases(ELEMENTS[selARef.current!].s, ELEMENTS[hitIdx].s);
         draw();
         setTimeout(() => {
-          compoundPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          compoundPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }, 100);
       }
     }
@@ -993,7 +982,7 @@ export function ElementMap() {
 
       <div className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow)]">
         <div ref={wrapRef} className="relative">
-          <canvas ref={canvasRef} style={{ display: mode === "compound" ? "none" : "block" }} />
+          <canvas ref={canvasRef} style={{ display: "block" }} />
 
           {/* Hover tooltip (grid / scatter only) */}
           <div
@@ -1174,7 +1163,9 @@ export function ElementMap() {
                     <th className="px-3 py-2 font-medium text-right">E<sub>hull</sub> (eV/at)</th>
                     <th className="px-3 py-2 font-medium text-right">E<sub>form</sub> (eV/at)</th>
                     <th className="px-3 py-2 font-medium text-right">Density (g/cm³)</th>
-                    <th className="px-3 py-2 font-medium text-right">Vol/atom (ų)</th>
+                    <th className="px-3 py-2 font-medium text-right">a (Å)</th>
+                    <th className="px-3 py-2 font-medium text-right">b (Å)</th>
+                    <th className="px-3 py-2 font-medium text-right">c (Å)</th>
                     <th className="px-3 py-2 font-medium text-center">Stable</th>
                     <th className="px-3 py-2 font-medium">MP ID</th>
                   </tr>
@@ -1195,8 +1186,13 @@ export function ElementMap() {
                         {typeof p.density === "number" ? p.density.toFixed(2) : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-gray-600">
-                        {typeof p.volume === "number" && typeof p.n_sites === "number" && p.n_sites > 0
-                          ? (p.volume / p.n_sites).toFixed(2) : "—"}
+                        {typeof p.a === "number" ? p.a.toFixed(3) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                        {typeof p.b === "number" ? p.b.toFixed(3) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                        {typeof p.c === "number" ? p.c.toFixed(3) : "—"}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {p.is_stable

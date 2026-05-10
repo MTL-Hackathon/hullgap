@@ -103,6 +103,9 @@ def _relax_task(task: dict) -> dict:
 
     energy = float(atoms.get_potential_energy())
     n_atoms = len(atoms)
+    cell = atoms.get_cell()
+    lengths = cell.lengths()
+    angles = cell.angles()
     return {
         "label": task["label"],
         "energy_eV": energy,
@@ -110,7 +113,12 @@ def _relax_task(task: dict) -> dict:
         "energy_eV_per_atom": energy / n_atoms,
         "converged": opt.converged(),
         "n_steps": opt.nsteps,
-        "volume_A3": float(atoms.get_volume()),
+        "a": float(lengths[0]),
+        "b": float(lengths[1]),
+        "c": float(lengths[2]),
+        "alpha": float(angles[0]),
+        "beta": float(angles[1]),
+        "gamma": float(angles[2]),
     }
 
 
@@ -208,21 +216,31 @@ def main() -> None:
             "E_form_eV_per_atom": E_form,
             "converged": r["converged"],
             "steps": r["n_steps"],
+            "a": r["a"],
+            "b": r["b"],
+            "c": r["c"],
+            "alpha": r["alpha"],
+            "beta": r["beta"],
+            "gamma": r["gamma"],
         })
 
     import pandas as pd
 
     df = pd.DataFrame(rows).sort_values("E_form_eV_per_atom")
 
-    print(f"\n{'='*90}")
-    print(f" {'#':<3} {'Name':<42} {'Comp':<10} {'E/at':>8} {'E_form':>8} {'Conv':>5} {'Steps':>5}")
-    print(f"{'-'*90}")
+    w = 130
+    print(f"\n{'=' * w}")
+    print(f" {'#':<3} {'Name':<42} {'Comp':<10} {'E/at':>8} {'E_form':>8} "
+          f"{'a':>7} {'b':>7} {'c':>7} {'α':>6} {'β':>6} {'γ':>6} {'Conv':>5}")
+    print(f"{'-' * w}")
     for i, (_, row) in enumerate(df.iterrows(), 1):
         tag = "✓" if row["converged"] else "✗"
         comp = f"Co{row['n_Co']}Bi{row['n_Bi']}"
         print(f" {i:<3} {row['name']:<42} {comp:<10} "
-              f"{row['E_eV_per_atom']:>8.4f} {row['E_form_eV_per_atom']:>8.4f} {tag:>5} {row['steps']:>5}")
-    print(f"{'='*90}")
+              f"{row['E_eV_per_atom']:>8.4f} {row['E_form_eV_per_atom']:>8.4f} "
+              f"{row['a']:>7.3f} {row['b']:>7.3f} {row['c']:>7.3f} "
+              f"{row['alpha']:>6.1f} {row['beta']:>6.1f} {row['gamma']:>6.1f} {tag:>5}")
+    print(f"{'=' * w}")
 
     n_stable = (df["E_form_eV_per_atom"] < 0).sum()
     n_marginal = ((df["E_form_eV_per_atom"] >= 0) & (df["E_form_eV_per_atom"] < 0.05)).sum()

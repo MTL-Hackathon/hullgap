@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     url.searchParams.set("chemsys", chemsys);
     url.searchParams.set(
       "_fields",
-      "material_id,formula_pretty,symmetry,energy_above_hull,formation_energy_per_atom,volume,nsites,density,is_stable",
+      "material_id,formula_pretty,symmetry,energy_above_hull,formation_energy_per_atom,volume,nsites,density,is_stable,structure",
     );
     url.searchParams.set("_limit", "50");
 
@@ -36,18 +36,28 @@ export async function GET(request: NextRequest) {
     }
 
     const json = await res.json();
-    const entries = (json.data ?? []).map((d: Record<string, unknown>) => ({
-      id: d.material_id,
-      formula: d.formula_pretty,
-      spacegroup: (d.symmetry as Record<string, unknown>)?.symbol ?? "—",
-      crystal_system: (d.symmetry as Record<string, unknown>)?.crystal_system ?? "—",
-      e_above_hull: d.energy_above_hull,
-      formation_energy: d.formation_energy_per_atom,
-      density: d.density,
-      n_sites: d.nsites,
-      volume: d.volume,
-      is_stable: d.is_stable,
-    }));
+    const entries = (json.data ?? []).map((d: Record<string, unknown>) => {
+      const struct = d.structure as Record<string, unknown> | undefined;
+      const lattice = struct?.lattice as Record<string, number> | undefined;
+      return {
+        id: d.material_id,
+        formula: d.formula_pretty,
+        spacegroup: (d.symmetry as Record<string, unknown>)?.symbol ?? "—",
+        crystal_system: (d.symmetry as Record<string, unknown>)?.crystal_system ?? "—",
+        e_above_hull: d.energy_above_hull,
+        formation_energy: d.formation_energy_per_atom,
+        density: d.density,
+        n_sites: d.nsites,
+        volume: d.volume,
+        is_stable: d.is_stable,
+        a: lattice?.a ?? null,
+        b: lattice?.b ?? null,
+        c: lattice?.c ?? null,
+        alpha: lattice?.alpha ?? null,
+        beta: lattice?.beta ?? null,
+        gamma: lattice?.gamma ?? null,
+      };
+    });
 
     entries.sort(
       (a: { e_above_hull: number }, b: { e_above_hull: number }) =>
