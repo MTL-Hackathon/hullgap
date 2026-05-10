@@ -1,8 +1,8 @@
 "use client";
 
-export type Step = "input" | "candidates" | "validation" | "viewer";
+export type Step = "candidates" | "validation" | "viewer";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 interface StepItem {
   n: string;
@@ -18,7 +18,6 @@ export function StepTracker({
   canOpenCandidates,
   canOpenValidation,
   canOpenViewer,
-  onOpenInput,
   onOpenCandidates,
   onOpenValidation,
   onOpenViewer,
@@ -28,7 +27,6 @@ export function StepTracker({
   canOpenCandidates: boolean;
   canOpenValidation: boolean;
   canOpenViewer: boolean;
-  onOpenInput: () => void;
   onOpenCandidates: () => void;
   onOpenValidation: () => void;
   onOpenViewer: () => void;
@@ -36,27 +34,20 @@ export function StepTracker({
   const items: StepItem[] = [
     {
       n: "01",
-      title: "Element Selection",
-      active: step === "input",
-      locked: false,
-      onClick: onOpenInput,
-    },
-    {
-      n: "02",
       title: "Candidate Generation",
       active: step === "candidates",
       locked: !canOpenCandidates,
       onClick: onOpenCandidates,
     },
     {
-      n: "03",
+      n: "02",
       title: "MACE Validation",
       active: step === "validation",
       locked: !canOpenValidation,
       onClick: onOpenValidation,
     },
     {
-      n: "04",
+      n: "03",
       title: "Crystal Viewer",
       active: step === "viewer",
       locked: !canOpenViewer,
@@ -65,7 +56,7 @@ export function StepTracker({
   ];
 
   return (
-    <ol className="relative mb-10 grid w-full grid-cols-4 gap-4">
+    <ol className="relative grid w-full grid-cols-3 gap-4">
       <div
         aria-hidden
         className="pointer-events-none absolute left-0 right-0 top-[22px] hidden h-px bg-slate-200 sm:block"
