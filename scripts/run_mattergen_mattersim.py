@@ -36,6 +36,8 @@ from hullgap.hull import (
     hull_energy_at_x,
     lower_convex_hull_2d,
 )
+from hullgap.properties.elastic import compute_elastic_properties
+from hullgap.properties.phonons import compute_phonons
 from hullgap.references import get_elemental_references
 
 logging.basicConfig(
@@ -58,6 +60,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-candidates", type=int, default=32)
     p.add_argument("--guidance", type=float, default=2.0)
     p.add_argument("--e-above-hull-target", type=float, default=0.0)
+    p.add_argument("--skip-properties", action="store_true",
+                   help="Skip phonon and elastic property calculations")
+    p.add_argument("--n-property-candidates", type=int, default=5,
+                   help="Number of top candidates to characterize (phonons + elastic)")
     return p.parse_args()
 
 
@@ -325,6 +331,161 @@ def step6_save(df_ok: pd.DataFrame, structures, results_csv: Path,
     log.info("Saved %d relaxed CIF files to %s", saved, relaxed_dir)
 
 
+# ── Step 7: Phonon stability ──────────────────────────────────────────
+
+
+def step7_phonons(df_ok: pd.DataFrame, structures, calc,
+                  n_top: int = 5) -> pd.DataFrame:
+    """Compute phonon properties for the top n_top candidates."""
+    log.info("=== Step 7: Phonon stability (top %d candidates) ===", n_top)
+
+    top_idx = df_ok.nsmallest(n_top, "e_above_hull_eV_atom").index
+
+    df_ok["dynamically_stable"] = pd.NA
+    df_ok["min_freq_THz"] = np.nan
+    df_ok["Cv_300K_J_K_mol"] = np.nan
+    df_ok["free_energy_300K_kJ_mol"] = np.nan
+
+    for idx in top_idx:
+        row = df_ok.loc[idx]
+        struct_idx = int(row["idx"])
+        formula = row["formula"]
+
+        log.info("  Phonons for [%d] %s ...", struct_idx, formula)
+        atoms = AseAtomsAdaptor.get_atoms(structures[struct_idx])
+
+        try:
+            result = compute_phonons(atoms, calc=calc)
+            df_ok.at[idx, "dynamically_stable"] = not result["has_imaginary"]
+            df_ok.at[idx, "min_freq_THz"] = result["min_frequency_THz"]
+            df_ok.at[idx, "Cv_300K_J_K_mol"] = result["heat_capacity_J_K_mol"]
+            df_ok.at[idx, "free_energy_300K_kJ_mol"] = result["free_energy_kJ_mol"]
+
+            stability = "STABLE" if not result["has_imaginary"] else "UNSTABLE"
+            log.info("    %s  min_freq=%.3f THz  Cv=%.2f J/(K·mol)",
+                     stability, result["min_frequency_THz"],
+                     result["heat_capacity_J_K_mol"] or 0.0)
+        except Exception as exc:
+            log.error("    Phonon calculation failed: %s", exc)
+
+    n_stable = df_ok["dynamically_stable"].sum()
+    n_computed = df_ok["dynamically_stable"].notna().sum()
+    log.info("Phonon results: %d/%d dynamically stable", n_stable, n_computed)
+    return df_ok
+
+
+# ── Step 8: Elastic properties ───────────────────────────────────────
+
+
+def step8_elastic(df_ok: pd.DataFrame, structures, calc,
+                  n_top: int = 5) -> pd.DataFrame:
+    """Compute elastic properties for the top n_top candidates."""
+    log.info("=== Step 8: Elastic properties (top %d candidates) ===", n_top)
+
+    top_idx = df_ok.nsmallest(n_top, "e_above_hull_eV_atom").index
+
+    df_ok["bulk_modulus_GPa"] = np.nan
+    df_ok["shear_modulus_GPa"] = np.nan
+    df_ok["youngs_modulus_GPa"] = np.nan
+    df_ok["poisson_ratio"] = np.nan
+
+    for idx in top_idx:
+        row = df_ok.loc[idx]
+        struct_idx = int(row["idx"])
+        formula = row["formula"]
+
+        log.info("  Elastic for [%d] %s ...", struct_idx, formula)
+        atoms = AseAtomsAdaptor.get_atoms(structures[struct_idx])
+
+        try:
+            result = compute_elastic_properties(atoms, calc=calc)
+            df_ok.at[idx, "bulk_modulus_GPa"] = result["bulk_modulus_GPa"]
+            df_ok.at[idx, "shear_modulus_GPa"] = result["shear_modulus_GPa"]
+            df_ok.at[idx, "youngs_modulus_GPa"] = result["youngs_modulus_GPa"]
+            df_ok.at[idx, "poisson_ratio"] = result["poisson_ratio"]
+
+            log.info("    K=%.1f GPa  G=%.1f GPa  E=%.1f GPa  ν=%.3f",
+                     result["bulk_modulus_GPa"], result["shear_modulus_GPa"],
+                     result["youngs_modulus_GPa"], result["poisson_ratio"])
+        except Exception as exc:
+            log.error("    Elastic calculation failed: %s", exc)
+
+    n_computed = df_ok["bulk_modulus_GPa"].notna().sum()
+    log.info("Elastic results computed for %d candidates", n_computed)
+    return df_ok
+
+
+# ── Step 9: Property summary plot ────────────────────────────────────
+
+
+def step9_property_plot(df_ok: pd.DataFrame, element_a: str,
+                        element_b: str, save_path: Path) -> None:
+    """Plot property summary for characterized candidates."""
+    log.info("=== Step 9: Property summary plot ===")
+
+    has_props = df_ok[df_ok["bulk_modulus_GPa"].notna()].copy()
+    if has_props.empty:
+        log.warning("No property data to plot")
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Left: Bulk modulus vs energy above hull
+    ax = axes[0]
+    colors = has_props["dynamically_stable"].map(
+        {True: "#22c55e", False: "#ef4444"}
+    ).fillna("#94a3b8")
+
+    ax.scatter(
+        has_props["e_above_hull_eV_atom"] * 1000,
+        has_props["bulk_modulus_GPa"],
+        c=colors, s=80, edgecolors="white", linewidths=0.8, zorder=5,
+    )
+    for _, row in has_props.iterrows():
+        ax.annotate(
+            row["formula"],
+            (row["e_above_hull_eV_atom"] * 1000, row["bulk_modulus_GPa"]),
+            textcoords="offset points", xytext=(6, 4), fontsize=8,
+        )
+    ax.set_xlabel("Energy above hull (meV/atom)")
+    ax.set_ylabel("Bulk modulus (GPa)")
+    ax.set_title("Mechanical stiffness vs stability")
+    ax.axvline(25, ls="--", color="#cbd5e1", lw=1)
+    ax.grid(True, alpha=0.15)
+
+    # Right: bar chart of moduli for top candidates
+    ax = axes[1]
+    formulas = has_props["formula"].values
+    x = np.arange(len(formulas))
+    width = 0.35
+
+    ax.bar(x - width / 2, has_props["bulk_modulus_GPa"], width,
+           label="Bulk (K)", color="#3b82f6", alpha=0.8)
+    ax.bar(x + width / 2, has_props["shear_modulus_GPa"], width,
+           label="Shear (G)", color="#f59e0b", alpha=0.8)
+
+    # Phonon stability markers
+    for i, (_, row) in enumerate(has_props.iterrows()):
+        if row.get("dynamically_stable") is True:
+            ax.text(i, -8, "✓", ha="center", fontsize=12, color="#22c55e",
+                    fontweight="bold")
+        elif row.get("dynamically_stable") is False:
+            ax.text(i, -8, "✗", ha="center", fontsize=12, color="#ef4444",
+                    fontweight="bold")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(formulas, fontsize=9, rotation=30, ha="right")
+    ax.set_ylabel("Modulus (GPa)")
+    ax.set_title(f"{element_a}–{element_b} top candidates")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.15, axis="y")
+
+    fig.tight_layout()
+    plt.savefig(str(save_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    log.info("Property plot saved to %s", save_path)
+
+
 # ── main ─────────────────────────────────────────────────────────────
 
 
@@ -366,6 +527,21 @@ def main():
     if not df_ok.empty:
         step5_plot(df_ok, hull, args.element_a, args.element_b, plot_path)
         step6_save(df_ok, structures, results_csv, output_dir, system)
+
+        if not args.skip_properties:
+            n_top = args.n_property_candidates
+            df_ok = step7_phonons(df_ok, structures, calc, n_top=n_top)
+            df_ok = step8_elastic(df_ok, structures, calc, n_top=n_top)
+
+            prop_plot_path = results_csv.with_name(
+                f"{system}_properties.png"
+            )
+            step9_property_plot(df_ok, args.element_a, args.element_b,
+                               prop_plot_path)
+
+            # Re-save CSV with property columns
+            df_ok.to_csv(results_csv, index=False)
+            log.info("Updated results CSV with property data: %s", results_csv)
 
     log.info("=== Done ===")
 

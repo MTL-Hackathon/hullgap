@@ -33,6 +33,9 @@ matter = [
     "mattergen",
     "mattersim",
 ]
+properties = [
+    "phonopy>=2.20",
+]
 notebook = [
     "jupyterlab>=4.0",
     "ipykernel>=6.0",
@@ -42,7 +45,7 @@ ui = [
     "plotly>=5.18",
 ]
 all = [
-    "hullgap[mace,matter,notebook,ui]",
+    "hullgap[mace,matter,properties,notebook,ui]",
 ]
 
 [project.urls]
