@@ -7,8 +7,8 @@ import {
   predictionsCsvRowsToCandidates,
 } from "@/lib/hull-csv";
 
-export const dynamic: "force-static" | "auto" =
-  process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? "force-static" : "auto";
+/** Literal required by Turbopack; satisfies `output: "export"` route collection. */
+export const dynamic = "force-static";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 const DATA_DIR = join(process.cwd(), "..", "..", "data", "results");
