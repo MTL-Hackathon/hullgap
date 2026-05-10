@@ -86,9 +86,16 @@ interface Props {
   assembled: boolean;
   onLanded?: () => void;
   onDisassembled?: () => void;
+  /** Fires after the overlay finishes fading out following a completed fly-in. */
+  onComplete?: () => void;
 }
 
-export function FloatingElements({ assembled, onLanded, onDisassembled }: Props) {
+export function FloatingElements({
+  assembled,
+  onLanded,
+  onDisassembled,
+  onComplete,
+}: Props) {
   const [dims, setDims] = useState<{ vw: number; vh: number } | null>(null);
   const [fading, setFading] = useState(false);
   const [posReady, setPosReady] = useState(false);
@@ -109,6 +116,8 @@ export function FloatingElements({ assembled, onLanded, onDisassembled }: Props)
   onLandedRef.current = onLanded;
   const onDisassembledRef = useRef(onDisassembled);
   onDisassembledRef.current = onDisassembled;
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     const update = () => setDims({ vw: window.innerWidth, vh: window.innerHeight });
@@ -227,6 +236,15 @@ export function FloatingElements({ assembled, onLanded, onDisassembled }: Props)
     floatRafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(floatRafRef.current);
   }, [dims, tileSize, posReady, floatEpoch]);
+
+  // After fly-in completes, `fading` becomes true and opacity animates to 0 — notify parent.
+  useEffect(() => {
+    if (!fading) return;
+    const id = window.setTimeout(() => {
+      onCompleteRef.current?.();
+    }, 400);
+    return () => clearTimeout(id);
+  }, [fading]);
 
   // Disassembly: when assembled goes true → false, restart floating
   useEffect(() => {
