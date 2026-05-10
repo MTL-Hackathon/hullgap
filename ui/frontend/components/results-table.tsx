@@ -16,9 +16,9 @@ export function ResultsTable({ results }: Props) {
             <th className="px-4 py-3 font-medium">Atoms</th>
             <th className="px-4 py-3 font-medium">x(B)</th>
             <th className="px-4 py-3 font-medium">ML Form. E</th>
-            <th className="px-4 py-3 font-medium">MACE E</th>
-            <th className="px-4 py-3 font-medium">MACE E above hull</th>
-            <th className="px-4 py-3 font-medium">MACE Stable?</th>
+            <th className="px-4 py-3 font-medium">DFT E</th>
+            <th className="px-4 py-3 font-medium">DFT E above hull</th>
+            <th className="px-4 py-3 font-medium">DFT Stable?</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border)]">

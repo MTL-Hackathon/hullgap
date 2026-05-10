@@ -68,7 +68,8 @@ function ExpandedRow({
   const cameraDistance = useMemo(() => {
     if (!structure) return 10;
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 1.8;
+    // 2x2x2 supercell -> need ~3x max(a,b,c) to frame the whole cluster.
+    return Math.max(a, b, c) * 3.2;
   }, [structure]);
 
   return (
@@ -94,7 +95,11 @@ function ExpandedRow({
                   <span className="text-slate-600">{candidate.formula}</span>
                 </div>
                 <div>
-                  <span className="font-medium text-[var(--foreground)]">Crystal system:</span>{" "}
+                  <span className="font-medium text-[var(--foreground)]">Lattice geometry:</span>{" "}
+                  <span className="text-slate-600">{structure?.crystal_system ?? "—"}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-[var(--foreground)]">Detected symmetry:</span>{" "}
                   <span className="text-slate-600">{candidate.crystal_system}</span>
                 </div>
                 <div>

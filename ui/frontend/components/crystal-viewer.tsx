@@ -105,53 +105,63 @@ function cellCorners(
   );
 }
 
+/** 2x2x2 supercell — 8 cells stacked in the +a, +b, +c directions starting
+ *  at the primary cell. Returns integer (i, j, k) lattice indices, not cart
+ *  offsets, so atoms can be placed at (frac + (i,j,k)) · lattice. */
+function supercellIndices(): [number, number, number][] {
+  const out: [number, number, number][] = [];
+  for (let i = 0; i <= 1; i++)
+    for (let j = 0; j <= 1; j++)
+      for (let k = 0; k <= 1; k++)
+        out.push([i, j, k]);
+  return out;
+}
+
 /** Wrap a fractional coordinate into [0, 1). Relaxation can leave frac
  *  components slightly outside that range; without wrapping, those atoms
- *  appear floating outside the unit-cell wireframe. */
+ *  appear floating outside their cell wireframe. */
 function wrapFrac(x: number): number {
   const w = x - Math.floor(x);
   return w === 1 ? 0 : w;
 }
 
-/** For an atom whose (wrapped) fractional coords sit on a cell face/edge/
- *  corner, return the periodic-image fractional coords on the opposite
- *  face/edge/corner so the boundary of the unit cell looks continuous.
- *  Atoms strictly inside the cell yield only themselves. */
-function periodicImages(
-  fx: number,
-  fy: number,
-  fz: number,
-  eps: number,
-): [number, number, number][] {
-  const xs = [fx];
-  const ys = [fy];
-  const zs = [fz];
-  if (fx < eps) xs.push(fx + 1);
-  else if (fx > 1 - eps) xs.push(fx - 1);
-  if (fy < eps) ys.push(fy + 1);
-  else if (fy > 1 - eps) ys.push(fy - 1);
-  if (fz < eps) zs.push(fz + 1);
-  else if (fz > 1 - eps) zs.push(fz - 1);
-  const out: [number, number, number][] = [];
-  for (const x of xs) for (const y of ys) for (const z of zs) out.push([x, y, z]);
-  return out;
-}
-
-/** Draw the unit cell's wireframe (12 edges). */
+/** Draw a wireframe around every cell of the 2x2x2 supercell. The primary
+ *  cell (i=j=k=0) is bold red; the seven neighbour cells are thin gray so
+ *  the unit cell stays visually obvious while the periodic context is still
+ *  conveyed. */
 function SupercellEdges({ latticeMatrix }: { latticeMatrix: [number, number, number][] }) {
-  const edges = useMemo(() => {
-    const corners = cellCorners(latticeMatrix);
-    return EDGE_PAIRS.map(([i, j]) => [corners[i], corners[j]] as [
-      [number, number, number],
-      [number, number, number],
-    ]);
+  const cells = useMemo(() => {
+    const [a, b, c] = latticeMatrix;
+    return supercellIndices().map(([i, j, k]) => {
+      const offset: [number, number, number] = [
+        i * a[0] + j * b[0] + k * c[0],
+        i * a[1] + j * b[1] + k * c[1],
+        i * a[2] + j * b[2] + k * c[2],
+      ];
+      const corners = cellCorners(latticeMatrix, offset);
+      const edges = EDGE_PAIRS.map(([m, n]) => [corners[m], corners[n]] as [
+        [number, number, number],
+        [number, number, number],
+      ]);
+      const isPrimary = i === 0 && j === 0 && k === 0;
+      return { key: `${i}${j}${k}`, edges, isPrimary };
+    });
   }, [latticeMatrix]);
 
   return (
     <>
-      {edges.map((points, i) => (
-        <Line key={i} points={points} color="#e03030" lineWidth={2} />
-      ))}
+      {cells.map(({ key, edges, isPrimary }) =>
+        edges.map((points, ei) => (
+          <Line
+            key={`${key}-${ei}`}
+            points={points}
+            color={isPrimary ? "#e03030" : "#cbd5e1"}
+            lineWidth={isPrimary ? 2 : 1}
+            transparent={!isPrimary}
+            opacity={isPrimary ? 1 : 0.55}
+          />
+        )),
+      )}
     </>
   );
 }
@@ -165,26 +175,32 @@ function Atoms({
   fracCoords: [number, number, number][];
   latticeMatrix: [number, number, number][];
 }) {
-  const uniqueSpecies = useMemo(() => [...new Set(species)], [species]);
-
-  // Build the list of atoms to render: each atom is wrapped into [0, 1) and
-  // duplicated onto the opposite face/edge/corner if it lies on a cell
-  // boundary, so the viewer matches what the unit-cell wireframe encloses.
+  // For every cell of the 2x2x2 supercell, place every atom at its wrapped
+  // fractional coordinate inside that cell. Each atom is therefore enclosed
+  // by the wireframe of the cell it belongs to — no floating atoms outside
+  // any cell, and the periodic structure fills the rendered volume.
+  // Shift the whole structure so the first atom sits at the (0,0,0) corner
+  // of the primary cell — this gives a clear visual anchor where periodic
+  // copies of one atom land on every cell corner.
   const renderAtoms = useMemo(() => {
     const [aVec, bVec, cVec] = latticeMatrix;
-    const eps = 0.02;
+    const cells = supercellIndices();
+    const [shiftX, shiftY, shiftZ] = fracCoords[0] ?? [0, 0, 0];
     const out: { species: string; pos: [number, number, number] }[] = [];
     fracCoords.forEach((f, i) => {
-      const wx = wrapFrac(f[0]);
-      const wy = wrapFrac(f[1]);
-      const wz = wrapFrac(f[2]);
-      for (const [ix, iy, iz] of periodicImages(wx, wy, wz, eps)) {
+      const wx = wrapFrac(f[0] - shiftX);
+      const wy = wrapFrac(f[1] - shiftY);
+      const wz = wrapFrac(f[2] - shiftZ);
+      for (const [ci, cj, ck] of cells) {
+        const fx = wx + ci;
+        const fy = wy + cj;
+        const fz = wz + ck;
         out.push({
           species: species[i],
           pos: [
-            ix * aVec[0] + iy * bVec[0] + iz * cVec[0],
-            ix * aVec[1] + iy * bVec[1] + iz * cVec[1],
-            ix * aVec[2] + iy * bVec[2] + iz * cVec[2],
+            fx * aVec[0] + fy * bVec[0] + fz * cVec[0],
+            fx * aVec[1] + fy * bVec[1] + fz * cVec[1],
+            fx * aVec[2] + fy * bVec[2] + fz * cVec[2],
           ],
         });
       }
@@ -194,43 +210,38 @@ function Atoms({
 
   return (
     <>
-      {uniqueSpecies.map((sym) => {
-        const color = ELEMENT_COLORS[sym] || "#888888";
-        const radius = ELEMENT_RADII[sym] || 0.3;
-        return renderAtoms
-          .map((atom, ai) => (atom.species === sym ? { atom, ai } : null))
-          .filter((x): x is { atom: { species: string; pos: [number, number, number] }; ai: number } => x !== null)
-          .map(({ atom, ai }) => (
-            <mesh key={`${sym}-${ai}`} position={atom.pos}>
-              <sphereGeometry args={[radius, 24, 24]} />
-              <meshStandardMaterial
-                color={color}
-                roughness={0.4}
-                metalness={0.3}
-              />
-            </mesh>
-          ));
+      {renderAtoms.map((atom, ai) => {
+        const color = ELEMENT_COLORS[atom.species] || "#888888";
+        const radius = ELEMENT_RADII[atom.species] || 0.3;
+        return (
+          <mesh key={ai} position={atom.pos}>
+            <sphereGeometry args={[radius, 24, 24]} />
+            <meshStandardMaterial color={color} roughness={0.4} metalness={0.3} />
+          </mesh>
+        );
       })}
     </>
   );
 }
 
 export function StructureScene({ structure }: { structure: StructureData }) {
-  // Centre on the geometric centre of the *primary* unit cell — i.e.
-  // (a+b+c)/2, not (a+b+c). The previous code used the far corner, which
-  // pushed the unit cell into one octant of the view.
+  // The 2x2x2 supercell spans from (0,0,0) to (a+b+c)+(a+b+c) = 2*(a+b+c),
+  // so its geometric centre is (a+b+c). Translate by -centre so the orbit
+  // target sits at the supercell midpoint — the primary unit cell ends up
+  // at one edge of the rendered volume, fully exposed and easy to see.
   const center = useMemo(() => {
     const [a, b, c] = structure.lattice_matrix;
     return [
-      (a[0] + b[0] + c[0]) / 2,
-      (a[1] + b[1] + c[1]) / 2,
-      (a[2] + b[2] + c[2]) / 2,
+      a[0] + b[0] + c[0],
+      a[1] + b[1] + c[1],
+      a[2] + b[2] + c[2],
     ] as [number, number, number];
   }, [structure.lattice_matrix]);
 
   const cameraDistance = useMemo(() => {
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 1.8;
+    // 2x2x2 supercell -> ~2x larger extent than the primary cell.
+    return Math.max(a, b, c) * 3.2;
   }, [structure.lattice_params]);
 
   return (
@@ -249,7 +260,7 @@ export function StructureScene({ structure }: { structure: StructureData }) {
       <OrbitControls
         makeDefault
         target={[0, 0, 0]}
-        minDistance={cameraDistance * 0.3}
+        minDistance={cameraDistance * 0.2}
         maxDistance={cameraDistance * 4}
       />
     </>
@@ -300,7 +311,8 @@ export function CrystalViewer({ elementA, elementB, candidate }: CrystalViewerPr
   const cameraDistance = useMemo(() => {
     if (!structure) return 10;
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 1.8;
+    // 2x2x2 supercell -> need ~3x max(a,b,c) to frame the whole cluster.
+    return Math.max(a, b, c) * 3.2;
   }, [structure]);
 
   return (
@@ -311,7 +323,7 @@ export function CrystalViewer({ elementA, elementB, candidate }: CrystalViewerPr
             Structure Preview
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            {candidate.formula} &mdash; {candidate.crystal_system}
+            {candidate.formula} &mdash; {structure?.crystal_system ?? candidate.crystal_system}
           </p>
         </div>
 
@@ -367,7 +379,11 @@ export function CrystalViewer({ elementA, elementB, candidate }: CrystalViewerPr
             </span>
           </div>
           <div>
-            <span className="font-medium text-[var(--foreground)]">Crystal system:</span>{" "}
+            <span className="font-medium text-[var(--foreground)]">Lattice geometry:</span>{" "}
+            {structure?.crystal_system ?? "—"}
+          </div>
+          <div>
+            <span className="font-medium text-[var(--foreground)]">Detected symmetry:</span>{" "}
             {candidate.crystal_system}
           </div>
           {structure && (

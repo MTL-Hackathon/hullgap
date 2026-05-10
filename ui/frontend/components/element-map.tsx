@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { StepTracker } from "./step-tracker";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 type Cat =
@@ -561,6 +562,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   const enScaleRef = useRef(2.5);
   const shapeRef   = useRef<number[]>([]);
 
+
   // 3D camera state
   const rotRef       = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const zoomRef      = useRef<number>(1);
@@ -579,6 +581,21 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   // loop so handlers can read it without a re-render dependency.
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const viewModeRef = useRef<"2d" | "3d">("2d");
+  // Legend popover: tracks WHY it's open so hover-open closes on
+  // mouse leave but click-open stays until an outside click.
+  const [legendOpenBy, setLegendOpenBy] = useState<"hover" | "click" | null>(null);
+  const legendWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (legendOpenBy !== "click") return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (legendWrapRef.current && !legendWrapRef.current.contains(e.target as Node)) {
+        setLegendOpenBy(null);
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [legendOpenBy]);
 
   // MP phase data
   interface MpPhase {
@@ -1375,6 +1392,95 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
         <div ref={wrapRef} className="relative">
           <canvas ref={canvasRef} style={{ display: "block" }} />
 
+          {/* Legend button — bottom-left of the canvas. Hover opens it
+              transiently (closes on mouse-leave); click toggles it
+              persistently (closes on outside click). Hidden in grid mode
+              since the legend explains scatter/compound layout. */}
+          {mode !== "grid" && (
+          <div
+            ref={legendWrapRef}
+            className="absolute bottom-3 left-3 z-20"
+            onMouseEnter={() => {
+              if (legendOpenBy === null) setLegendOpenBy("hover");
+            }}
+            onMouseLeave={() => {
+              if (legendOpenBy === "hover") setLegendOpenBy(null);
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Show legend"
+              aria-expanded={legendOpenBy !== null}
+              onClick={() =>
+                setLegendOpenBy(prev => (prev === "click" ? null : "click"))
+              }
+              className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/95 backdrop-blur-sm px-5 py-1.5 text-xs font-semibold text-gray-700 shadow-md transition-colors hover:text-gray-900"
+            >
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              Legend
+            </button>
+            {legendOpenBy !== null && (
+              <div
+                role="dialog"
+                aria-label="Legend"
+                className="absolute bottom-full left-0 mb-2 w-[28rem] rounded-xl border border-[var(--border)] bg-white p-4 text-xs shadow-xl"
+              >
+                <div className="mb-3">
+                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                    How to read
+                  </div>
+                  <ul className="space-y-1.5 leading-snug text-[var(--muted)]">
+                    <li>
+                      <span className="font-medium text-[var(--foreground)]">Distance from anchor</span>
+                      {" — proportional to electronegativity difference (|ΔEN|). Closer = chemically more similar."}
+                    </li>
+                    <li>
+                      <span className="font-medium text-[var(--foreground)]">Circle size</span>
+                      {" — scales with atomic radius."}
+                    </li>
+                    <li>
+                      <span className="font-medium text-[var(--foreground)]">Direction</span>
+                      {" — each chemical family fans out in its own band around the anchor (latitude in 3D, sector in 2D)."}
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                    Categories
+                  </div>
+                  <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+                    {LEGEND_GROUPS.map(cat => {
+                      const c = CAT_COLORS[cat];
+                      return (
+                        <li key={cat} className="flex items-center gap-1.5 text-[var(--muted)]">
+                          <span
+                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                            style={{ background: c.bg, border: `1.5px solid ${c.stroke}` }}
+                          />
+                          <span>{CAT_LABELS[cat]}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+          )}
+
           {/* Hover tooltip (grid / scatter only) */}
           <div
             ref={tooltipRef}
@@ -1411,71 +1517,102 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
         </div>
 
         {/* ── Compound pair builder ──────────────────────────────────── */}
-        {(mode === "scatter" || mode === "compound") && elA && (
-          <div
-            className={`flex items-center justify-center py-5 ${mode !== "grid" ? "border-t border-gray-100" : ""}`}
-            onClick={undefined}
-            style={{ cursor: undefined }}
-          >
-            {/* Element A */}
-            <div className="flex flex-col items-center gap-1.5">
-              <div
-                className="w-[88px] h-[88px] rounded-full flex flex-col items-center justify-center shadow-sm"
-                style={{
-                  background: CAT_COLORS[elA.cat].fill,
-                  border: `2.5px solid ${CAT_COLORS[elA.cat].stroke}`,
-                }}
-              >
-                <span className="text-white text-xl font-bold leading-tight">{elA.s}</span>
-                <span className="text-white/70 text-[10px] leading-tight">{elA.n}</span>
-              </div>
-              <span className="text-[10px] text-gray-400">{CAT_LABELS[elA.cat]}</span>
-            </div>
-
-            {/* Connecting line */}
-            <div className="relative mx-4 w-20 flex items-center">
-              <div className="w-full border-t-2 border-dashed border-gray-300" />
-              {elB && elA.en > 0 && elB.en > 0 && (
-                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-medium text-gray-500 whitespace-nowrap">
-                  ΔEN {Math.abs(elA.en - elB.en).toFixed(2)}
-                </span>
-              )}
-            </div>
-
-            {/* Element B or placeholder */}
-            <div className="flex flex-col items-center gap-1.5">
-              {elB ? (
-                <>
+        {/*
+         * Always mounted, slides + fades open via grid-template-rows.
+         * Pairs with the canvas-height lerp so the whole card morphs
+         * smoothly between the periodic table and the nodegraph view
+         * instead of snapping ~120px taller the moment selectedA flips.
+         * `renderElA` keeps content present while the wrapper closes.
+         */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateRows: expanded ? "1fr" : "0fr",
+            opacity: expanded ? 1 : 0,
+            transition: "grid-template-rows 500ms cubic-bezier(0.4,0,0.2,1), opacity 380ms ease",
+          }}
+        >
+          <div style={{ overflow: "hidden", minHeight: 0 }}>
+            {renderElA && (
+              <div className="flex items-center justify-center border-t border-gray-100 py-5">
+                {/* Element A */}
+                <div className="flex flex-col items-center gap-1.5">
                   <div
                     className="w-[88px] h-[88px] rounded-full flex flex-col items-center justify-center shadow-sm"
                     style={{
-                      background: CAT_COLORS[elB.cat].fill,
-                      border: `2.5px solid ${CAT_COLORS[elB.cat].stroke}`,
+                      background: CAT_COLORS[renderElA.cat].fill,
+                      border: `2.5px solid ${CAT_COLORS[renderElA.cat].stroke}`,
                     }}
                   >
-                    <span className="text-white text-xl font-bold leading-tight">{elB.s}</span>
-                    <span className="text-white/70 text-[10px] leading-tight">{elB.n}</span>
+                    <span className="text-white text-xl font-bold leading-tight">{renderElA.s}</span>
+                    <span className="text-white/70 text-[10px] leading-tight">{renderElA.n}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400">{CAT_LABELS[elB.cat]}</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-[88px] h-[88px] rounded-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center">
-                    <svg className="w-5 h-5 text-gray-300 mb-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    <span className="text-[10px] text-gray-400 leading-tight">Select 2nd</span>
-                  </div>
-                  <span className="text-[10px] text-transparent select-none">placeholder</span>
-                </>
-              )}
-            </div>
+                  <span className="text-[10px] text-gray-400">{CAT_LABELS[renderElA.cat]}</span>
+                </div>
+
+                {/* Connecting line */}
+                <div className="relative mx-4 w-20 flex items-center">
+                  <div className="w-full border-t-2 border-dashed border-gray-300" />
+                  {elB && renderElA.en > 0 && elB.en > 0 && (
+                    <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-medium text-gray-500 whitespace-nowrap">
+                      ΔEN {Math.abs(renderElA.en - elB.en).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Element B or placeholder */}
+                <div className="flex flex-col items-center gap-1.5">
+                  {elB ? (
+                    <>
+                      <div
+                        className="w-[88px] h-[88px] rounded-full flex flex-col items-center justify-center shadow-sm"
+                        style={{
+                          background: CAT_COLORS[elB.cat].fill,
+                          border: `2.5px solid ${CAT_COLORS[elB.cat].stroke}`,
+                        }}
+                      >
+                        <span className="text-white text-xl font-bold leading-tight">{elB.s}</span>
+                        <span className="text-white/70 text-[10px] leading-tight">{elB.n}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400">{CAT_LABELS[elB.cat]}</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-[88px] h-[88px] rounded-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center">
+                        <svg className="w-5 h-5 text-gray-300 mb-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        <span className="text-[10px] text-gray-400 leading-tight">Select 2nd</span>
+                      </div>
+                      <span className="text-[10px] text-transparent select-none">placeholder</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* ── Compound info panel ──────────────────────────────────────── */}
       {mode === "compound" && elA && elB && (
+        <>
+        <div className="mt-5">
+          <StepTracker
+            step="candidates"
+            canOpenElements={true}
+            canOpenCandidates={true}
+            canOpenValidation={false}
+            onOpenElements={() => {
+              selBRef.current = null;
+              setSelectedB(null);
+              setMpPhases(null);
+              scheduleDraw();
+            }}
+            onOpenCandidates={() => {}}
+            onOpenValidation={() => {}}
+          />
+        </div>
         <div ref={compoundPanelRef} className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-6 shadow-[var(--shadow)]">
           <div className="flex items-start justify-between mb-5">
             <div>
@@ -1643,6 +1780,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
             </button>
           </div>
         </div>
+        </>
       )}
 
       {/* Legend (hide in compound mode) */}

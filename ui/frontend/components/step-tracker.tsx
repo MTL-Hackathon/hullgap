@@ -14,6 +14,7 @@ interface StepItem {
 
 export function StepTracker({
   step,
+  pinnedStep,
   canOpenElements,
   canOpenCandidates,
   canOpenValidation,
@@ -22,6 +23,10 @@ export function StepTracker({
   onOpenValidation,
 }: {
   step: Step;
+  // When set, the bar always renders this step as active regardless of
+  // the live `step` value. Used so each section header shows its own
+  // step lit up rather than mirroring the global navigation state.
+  pinnedStep?: Step;
   canOpenElements: boolean;
   canOpenCandidates: boolean;
   canOpenValidation: boolean;
@@ -29,31 +34,32 @@ export function StepTracker({
   onOpenCandidates: () => void;
   onOpenValidation: () => void;
 }) {
+  const displayStep = pinnedStep ?? step;
   const items: StepItem[] = [
     {
       n: "01",
       title: "Element Mapping",
-      active: step === "elements",
+      active: displayStep === "elements",
       locked: !canOpenElements,
       onClick: onOpenElements,
     },
     {
       n: "02",
       title: "Candidate Generation",
-      active: step === "candidates",
+      active: displayStep === "candidates",
       locked: !canOpenCandidates,
       onClick: onOpenCandidates,
     },
     {
       n: "03",
       title: "DFT Verification",
-      active: step === "validation" || step === "viewer",
+      active: displayStep === "validation" || displayStep === "viewer",
       locked: !canOpenValidation,
       onClick: onOpenValidation,
     },
   ];
 
-  const stepIndex = step === "elements" ? 0 : step === "candidates" ? 1 : 2;
+  const stepIndex = displayStep === "elements" ? 0 : displayStep === "candidates" ? 1 : 2;
 
   return (
     <ol className="relative grid w-full grid-cols-3 gap-4">

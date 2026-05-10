@@ -36,7 +36,7 @@ function computeXB(formula: string, elementB: string): number {
 export function Workspace() {
   const [elementA, setElementA] = useState("Co");
   const [elementB, setElementB] = useState("Bi");
-  const [step, setStep] = useState<Step>("candidates");
+  const [step, setStep] = useState<Step>("elements");
   const [candidates, setCandidates] = useState<CandidateResult[] | null>(null);
   const [maceResults, setMaceResults] = useState<MaceResult[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -56,7 +56,7 @@ export function Workspace() {
   const mainRef = useRef<HTMLElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
 
-  const stepIndex = step === "candidates" ? 0 : step === "validation" ? 1 : 2;
+  const stepIndex = step === "elements" || step === "candidates" ? 0 : step === "validation" ? 1 : 2;
 
   const goBack = useCallback(() => {
     if (step === "validation") setStep("candidates");
@@ -190,7 +190,7 @@ export function Workspace() {
   }, [candidates, selected]);
 
   const reset = useCallback(() => {
-    setStep("candidates");
+    setStep("elements");
     setCandidates(null);
     setMaceResults(null);
     setSelected(new Set());
@@ -369,18 +369,19 @@ export function Workspace() {
       <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
         <StepTracker
           step={step}
-          stepIndex={stepIndex}
+          pinnedStep="elements"
+          canOpenElements={true}
           canOpenCandidates={Boolean(candidates)}
           canOpenValidation={Boolean(maceResults)}
-          canOpenViewer={viewerVisited}
+          onOpenElements={() => {
+            setStep("elements");
+            scrollToPeriodicTable();
+          }}
           onOpenCandidates={() => {
             if (candidates) setStep("candidates");
           }}
           onOpenValidation={() => {
             if (maceResults) setStep("validation");
-          }}
-          onOpenViewer={() => {
-            if (viewerVisited) setStep("viewer");
           }}
         />
       </div>
@@ -396,18 +397,19 @@ export function Workspace() {
         <div className="mb-6">
           <StepTracker
             step={step}
-            stepIndex={stepIndex}
+            pinnedStep="validation"
+            canOpenElements={true}
             canOpenCandidates={Boolean(candidates)}
             canOpenValidation={Boolean(maceResults)}
-            canOpenViewer={viewerVisited}
+            onOpenElements={() => {
+              setStep("elements");
+              scrollToPeriodicTable();
+            }}
             onOpenCandidates={() => {
               if (candidates) setStep("candidates");
             }}
             onOpenValidation={() => {
               if (maceResults) setStep("validation");
-            }}
-            onOpenViewer={() => {
-              if (viewerVisited) setStep("viewer");
             }}
           />
         </div>
@@ -471,7 +473,7 @@ export function Workspace() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-sm font-semibold tracking-[-0.01em] text-[var(--foreground)]">
-                          Select candidates for MACE validation
+                          Select candidates for DFT validation
                         </h3>
                         <p className="mt-1 text-xs text-slate-400">
                           {selected.size} of {candidates.length} selected
@@ -538,7 +540,7 @@ export function Workspace() {
                       ) : (
                         <Search className="h-4 w-4" aria-hidden />
                       )}
-                      Validate {selected.size} selected with MACE
+                      Validate {selected.size} selected with DFT
                     </button>
                   </div>
                 </div>
@@ -561,12 +563,12 @@ export function Workspace() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-                          MACE validation results
+                          DFT validation results
                         </h2>
                         <p className="mt-1 text-sm text-slate-500">
                           <strong>{maceResults.length}</strong> structures validated &middot;{" "}
                           <strong>{maceResults.filter((r) => r.mace_stable).length}</strong>{" "}
-                          confirmed stable by MACE
+                          confirmed stable by DFT
                         </p>
                       </div>
                     </div>
@@ -577,7 +579,7 @@ export function Workspace() {
                         mpData={mpHullData}
                         elementA={elementA}
                         elementB={elementB}
-                        title={`${elementA}\u2013${elementB} MACE convex hull`}
+                        title={`${elementA}\u2013${elementB} DFT convex hull`}
                       />
                     </div>
                   </div>
