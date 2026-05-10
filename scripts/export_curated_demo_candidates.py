@@ -12,45 +12,73 @@ OUT = ROOT / "data" / "demo" / "candidates_curated.csv"
 MAX_ROWS = 20
 
 
-def main() -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    out_rows: list[list[str]] = []
-    hull_header: list[str] | None = None
-
+def _candidate_paths() -> list[Path]:
+    paths: list[Path] = []
     for csv_path in sorted(RESULTS.glob("*_mattersim_hull.csv")):
         system = csv_path.name.replace("_mattersim_hull.csv", "")
         relaxed = MATTERGEN / system / "relaxed"
-        if not relaxed.is_dir():
-            continue
+        if relaxed.is_dir():
+            paths.append(csv_path)
+    return paths
 
+
+def _union_fieldnames(paths: list[Path]) -> list[str]:
+    """Stable union: columns appear in first-seen order across sorted files."""
+    seen: set[str] = set()
+    union: list[str] = []
+    for csv_path in paths:
         with csv_path.open(newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
-            rows = list(reader)
-        if len(rows) < 2:
+            hdr = next(reader, None)
+        if not hdr:
             continue
-        hdr = rows[0]
-        if hull_header is None:
-            hull_header = hdr
-            out_rows.append(["system", *hdr])
-        elif hdr != hull_header:
-            raise SystemExit(
-                f"Header mismatch in {csv_path.name}: expected {hull_header!r}, got {hdr!r}"
-            )
+        for col in hdr:
+            c = col.strip()
+            if c and c not in seen:
+                seen.add(c)
+                union.append(c)
+    return union
 
-        for parts in rows[1 : 1 + MAX_ROWS]:
-            if not parts or all(not c.strip() for c in parts):
-                continue
-            out_rows.append([system, *parts])
 
-    with OUT.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerows(out_rows)
+def main() -> None:
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    paths = _candidate_paths()
+    if not paths:
+        OUT.write_text("", encoding="utf-8")
+        print(f"No systems matched -> empty {OUT}")
+        return
 
-    n_data = max(0, len(out_rows) - 1)
-    n_systems = len({r[0] for r in out_rows[1:]}) if n_data else 0
-    print(f"Wrote {OUT} with {n_data} rows across {n_systems} systems (max {MAX_ROWS} each).")
-    if n_data == 0:
-        print("No systems matched (need data/results/*_mattersim_hull.csv + data/mattergen/<SYS>/relaxed/).")
+    data_cols = _union_fieldnames(paths)
+    fieldnames = ["system", *data_cols]
+
+    n_written = 0
+    n_systems = 0
+    with OUT.open("w", newline="", encoding="utf-8") as out_f:
+        writer = csv.DictWriter(
+            out_f,
+            fieldnames=fieldnames,
+            extrasaction="ignore",
+            restval="",
+        )
+        writer.writeheader()
+
+        for csv_path in paths:
+            system = csv_path.name.replace("_mattersim_hull.csv", "")
+            n_systems += 1
+            with csv_path.open(newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for i, row in enumerate(reader):
+                    if i >= MAX_ROWS:
+                        break
+                    if not any((v or "").strip() for v in row.values()):
+                        continue
+                    out_row = {"system": system}
+                    for k in data_cols:
+                        out_row[k] = row.get(k, "") or ""
+                    writer.writerow(out_row)
+                    n_written += 1
+
+    print(f"Wrote {OUT} with {n_written} rows across {n_systems} systems (max {MAX_ROWS} each).")
 
 
 if __name__ == "__main__":
