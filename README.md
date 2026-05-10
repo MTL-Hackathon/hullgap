@@ -69,7 +69,15 @@ Open http://localhost:3000.
 
 ### GitHub Pages (static demo)
 
-The workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) exports the Next.js UI as static HTML, bundles hull CSVs and relaxed CIFs from `data/results` and `data/mattergen`, and deploys to GitHub Pages on pushes to `main`. Enable it under **Settings → Pages → Build and deployment → GitHub Actions**.
+The workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) exports the Next.js UI as static HTML, bundles hull CSVs and relaxed CIFs from `data/results` and `data/mattergen`, and deploys to GitHub Pages on pushes to `main`.
+
+**Enable Pages (required once, or deploy returns HTTP 404):**
+
+1. Repo **Settings → Pages** (or org policy must allow Pages for this repo).
+2. Under **Build and deployment**, set **Source** to **GitHub Actions** (not “Deploy from a branch”). Save if prompted.
+3. Re-run the workflow (**Actions → Deploy GitHub Pages → Run workflow**) or push to `main` again.
+
+If the **deploy** job still fails with `HttpError: Not Found` / “Ensure GitHub Pages has been enabled”, an org owner may need to allow GitHub Pages for the organization, or (for forks) Pages may be disabled—use the upstream repo or a non-fork copy. Private repos need a plan that includes GitHub Pages.
 
 Project sites use base path `/<repository-name>` automatically. For a repository named `username.github.io`, the workflow sets an empty base path (site served at the domain root).
 
