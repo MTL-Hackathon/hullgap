@@ -90,12 +90,14 @@ interface Props {
 export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
   const [dims, setDims] = useState<{ vw: number; vh: number } | null>(null);
   const [visible, setVisible] = useState(true);
+  const [fading, setFading] = useState(false);
 
   const phaseRef = useRef<"float" | "fly" | "done">("float");
   const elemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const posRef = useRef<{ x: number; y: number; s: number; o: number }[]>([]);
   const posInitRef = useRef(false);
   const rafRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   const onLandedRef = useRef(onLanded);
   onLandedRef.current = onLanded;
   const onCompleteRef = useRef(onComplete);
@@ -147,8 +149,12 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
       if (inner) inner.style.animation = "none";
     });
 
-    const LERP = 0.045;
-    const OPA_LERP = 0.06;
+    const LERP_MIN = 0.045;
+    const LERP_MAX = 0.25;
+    const OPA_LERP = 0.1;
+    const SNAP = 0.5;
+    let startDists: number[] | null = null;
+    let landedFired = false;
 
     const tick = () => {
       const canvasEl = document.querySelector(
@@ -164,7 +170,18 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
       const step = cs + GAP;
       const targetScale = cs / tileSize;
 
+      if (!startDists) {
+        startDists = ELS.map(([, , col, row], i) => {
+          const pos = posRef.current[i];
+          if (!pos) return 1;
+          const tx = cRect.left + PAD + col * step;
+          const ty = cRect.top + gridY(row, step);
+          return Math.hypot(tx - pos.x, ty - pos.y) || 1;
+        });
+      }
+
       let allDone = true;
+      let maxRemaining = 0;
 
       ELS.forEach(([sym, , col, row], i) => {
         const el = elemRefs.current[i];
@@ -177,11 +194,17 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
 
         const dx = tx - pos.x;
         const dy = ty - pos.y;
+        const dist = Math.hypot(dx, dy);
 
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          pos.x += dx * LERP;
-          pos.y += dy * LERP;
-          pos.s += (targetScale - pos.s) * LERP;
+        const ratio = dist / (startDists![i] || 1);
+        if (ratio > maxRemaining) maxRemaining = ratio;
+
+        if (dist > SNAP) {
+          const progress = 1 - ratio;
+          const lerp = LERP_MIN + (LERP_MAX - LERP_MIN) * progress * progress;
+          pos.x += dx * lerp;
+          pos.y += dy * lerp;
+          pos.s += (targetScale - pos.s) * lerp;
           pos.o += (tOpa - pos.o) * OPA_LERP;
           allDone = false;
         } else {
@@ -195,11 +218,20 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
         el.style.opacity = String(Math.min(1, pos.o));
       });
 
+      if (maxRemaining < 0.5 && !landedFired) {
+        landedFired = true;
+        onLandedRef.current?.();
+      }
+
       if (allDone) {
         phaseRef.current = "done";
-        onLandedRef.current?.();
-        onCompleteRef.current?.();
-        setVisible(false);
+        if (!landedFired) onLandedRef.current?.();
+        setFading(true);
+        setTimeout(() => {
+          onCompleteRef.current?.();
+          setVisible(false);
+        }, 350);
+        return;
       } else {
         rafRef.current = requestAnimationFrame(tick);
       }
@@ -212,7 +244,14 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
   if (!dims || !visible) return null;
 
   return (
-    <div className="fixed inset-0 z-[15] pointer-events-none overflow-hidden">
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[15] pointer-events-none overflow-hidden"
+      style={{
+        opacity: fading ? 0 : 1,
+        transition: fading ? "opacity 0.35s ease-out" : "none",
+      }}
+    >
       <style>{`
         @keyframes el-float {
           0%, 100% { transform: translate(0, 0); }
@@ -238,6 +277,7 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
             style={{
               width: tileSize,
               height: tileSize,
+              transformOrigin: "0 0",
               transform: `translate(${fx}px, ${fy}px) scale(${r.scale})`,
               opacity: r.opacity,
             }}

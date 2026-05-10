@@ -36,6 +36,7 @@ export function Workspace() {
 
   const [assembled, setAssembled] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [canvasRevealed, setCanvasRevealed] = useState(false);
 
   const mainRef = useRef<HTMLElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
@@ -63,6 +64,10 @@ export function Workspace() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [assembled]);
+
+  const handleOverlayLanded = useCallback(() => {
+    setCanvasRevealed(true);
+  }, []);
 
   const handleOverlayComplete = useCallback(() => {
     setShowOverlay(false);
@@ -254,6 +259,7 @@ export function Workspace() {
       {showOverlay && (
         <FloatingElements
           assembled={assembled}
+          onLanded={handleOverlayLanded}
           onComplete={handleOverlayComplete}
         />
       )}
@@ -261,12 +267,12 @@ export function Workspace() {
       {/* Hero */}
       <HeroSection onGetStarted={scrollToPeriodicTable} />
 
-      {/* Step tracker + Element map — fade in after assembly */}
+      {/* Step tracker + Element map — fades in as tiles land */}
       <div
         style={{
-          opacity: assembled ? 1 : 0,
-          transition: "opacity 0.5s ease",
-          pointerEvents: !showOverlay ? "auto" : "none",
+          opacity: canvasRevealed ? 1 : 0,
+          transition: canvasRevealed && showOverlay ? "opacity 0.35s ease" : "none",
+          pointerEvents: showOverlay ? "none" : "auto",
         }}
       >
 
