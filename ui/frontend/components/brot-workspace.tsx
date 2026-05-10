@@ -63,9 +63,10 @@ export function BrotWorkspace() {
     else if (step === "viewer") setStep("validation");
   }, [step]);
 
-  const scrollToMain = useCallback(() => {
-    if (!mainRef.current) return;
-    const top = mainRef.current.getBoundingClientRect().top + window.scrollY - 56;
+  const scrollToPeriodicTable = useCallback(() => {
+    const el = document.getElementById("periodic-table");
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 56;
     window.scrollTo({ top, behavior: "smooth" });
   }, []);
 
@@ -258,7 +259,7 @@ export function BrotWorkspace() {
       </header>
 
       {/* Hero */}
-      <HeroSection onGetStarted={scrollToMain} />
+      <HeroSection onGetStarted={scrollToPeriodicTable} />
 
       {/* Element map */}
       <ElementMap />
