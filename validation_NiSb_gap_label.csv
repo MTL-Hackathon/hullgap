@@ -1,9 +1,0 @@
-material_id,formula_pretty,energy_above_hull,true_label,predicted_label,predicted_probability,correct,in_ambiguous_zone
-mp-672371,Ni3Sb,0.031380285,stable,stable,0.9943,True,False
-mp-2409,Ni5Sb2,0.024253112142854003,stable,stable,0.9946,True,False
-mp-810,NiSb,0.0,stable,stable,0.9766,True,False
-mp-19895,NiSb2,0.0,stable,stable,0.9939,True,False
-mp-1106023,NiSb3,0.015611355,stable,stable,0.9899,True,False
-mp-10260,Ni3Sb,0.069725850000001,ambiguous,dropped,,,True
-mp-976847,Ni3Sb,0.044902887500001,ambiguous,dropped,,,True
-mp-976893,Ni3Sb,0.047439457500001,ambiguous,dropped,,,True
