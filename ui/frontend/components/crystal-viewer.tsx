@@ -11,7 +11,7 @@ const subscribeNoop = () => () => {};
 const getClientSnapshot = () => true;
 const getServerSnapshot = () => false;
 
-const ELEMENT_COLORS: Record<string, string> = {
+export const ELEMENT_COLORS: Record<string, string> = {
   Co: "#3366cc",
   Bi: "#cc6633",
   Ni: "#228b22",
@@ -28,7 +28,7 @@ const ELEMENT_COLORS: Record<string, string> = {
   Pt: "#e5e4e2",
 };
 
-const ELEMENT_RADII: Record<string, number> = {
+export const ELEMENT_RADII: Record<string, number> = {
   Co: 0.3,
   Bi: 0.4,
   Ni: 0.3,
@@ -45,7 +45,7 @@ const ELEMENT_RADII: Record<string, number> = {
   Pt: 0.34,
 };
 
-const PROTOTYPES = [
+export const PROTOTYPES = [
   "CsCl_B2",
   "NaCl_B1",
   "ZnS_B3",
@@ -62,39 +62,92 @@ const PROTOTYPES = [
   "CaCu5_D2d_inv",
 ];
 
-function UnitCellEdges({ latticeMatrix }: { latticeMatrix: [number, number, number][] }) {
-  const edges = useMemo(() => {
-    const [a, b, c] = latticeMatrix;
-    const corners = [
-      [0, 0, 0],
-      a,
-      b,
-      c,
-      [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-      [a[0] + c[0], a[1] + c[1], a[2] + c[2]],
-      [b[0] + c[0], b[1] + c[1], b[2] + c[2]],
-      [a[0] + b[0] + c[0], a[1] + b[1] + c[1], a[2] + b[2] + c[2]],
-    ] as [number, number, number][];
+export function guessPrototype(xB: number): string {
+  if (xB < 0.01 || xB > 0.99) return "CsCl_B2";
+  const ratio = xB / (1 - xB);
+  if (ratio > 4) return "CaCu5_D2d_inv";
+  if (ratio > 2.5) return "Sn3Ni_D019";
+  if (ratio > 1.8) return "Au3Cu_L12";
+  if (ratio > 1.2) return "MoSi2_C11b";
+  if (ratio > 0.8) return "CsCl_B2";
+  if (ratio > 0.55) return "MoSi2_C11b";
+  if (ratio > 0.4) return "Cu3Au_L12";
+  if (ratio > 0.25) return "Ni3Sn_D019";
+  return "CaCu5_D2d";
+}
 
-    const edgePairs: [number, number][] = [
-      [0, 1], [0, 2], [0, 3],
-      [1, 4], [1, 5],
-      [2, 4], [2, 6],
-      [3, 5], [3, 6],
-      [4, 7], [5, 7], [6, 7],
-    ];
+const EDGE_PAIRS: [number, number][] = [
+  [0, 1], [0, 2], [0, 3],
+  [1, 4], [1, 5],
+  [2, 4], [2, 6],
+  [3, 5], [3, 6],
+  [4, 7], [5, 7], [6, 7],
+];
 
-    return edgePairs.map(([i, j]) => [corners[i], corners[j]] as [[number, number, number], [number, number, number]]);
+function cellCorners(
+  latticeMatrix: [number, number, number][],
+  offset: [number, number, number] = [0, 0, 0],
+): [number, number, number][] {
+  const [a, b, c] = latticeMatrix;
+  const o = offset;
+  const base = [
+    [0, 0, 0],
+    a,
+    b,
+    c,
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+    [a[0] + c[0], a[1] + c[1], a[2] + c[2]],
+    [b[0] + c[0], b[1] + c[1], b[2] + c[2]],
+    [a[0] + b[0] + c[0], a[1] + b[1] + c[1], a[2] + b[2] + c[2]],
+  ];
+  return base.map(
+    (p) => [p[0] + o[0], p[1] + o[1], p[2] + o[2]] as [number, number, number],
+  );
+}
+
+function supercellOffsets(
+  latticeMatrix: [number, number, number][],
+): [number, number, number][] {
+  const [a, b, c] = latticeMatrix;
+  const offsets: [number, number, number][] = [];
+  for (let i = 0; i < 2; i++)
+    for (let j = 0; j < 2; j++)
+      for (let k = 0; k < 2; k++)
+        offsets.push([
+          i * a[0] + j * b[0] + k * c[0],
+          i * a[1] + j * b[1] + k * c[1],
+          i * a[2] + j * b[2] + k * c[2],
+        ]);
+  return offsets;
+}
+
+function SupercellEdges({ latticeMatrix }: { latticeMatrix: [number, number, number][] }) {
+  const allEdges = useMemo(() => {
+    const offsets = supercellOffsets(latticeMatrix);
+    const result: { points: [[number, number, number], [number, number, number]]; primary: boolean }[] = [];
+    offsets.forEach((o) => {
+      const isPrimary = o[0] === 0 && o[1] === 0 && o[2] === 0;
+      const corners = cellCorners(latticeMatrix, o);
+      EDGE_PAIRS.forEach(([i, j]) => {
+        result.push({
+          points: [corners[i], corners[j]],
+          primary: isPrimary,
+        });
+      });
+    });
+    return result;
   }, [latticeMatrix]);
 
   return (
     <>
-      {edges.map((points, i) => (
+      {allEdges.map((edge, i) => (
         <Line
           key={i}
-          points={points}
-          color="#e03030"
-          lineWidth={2}
+          points={edge.points}
+          color={edge.primary ? "#e03030" : "#e03030"}
+          lineWidth={edge.primary ? 2 : 1}
+          opacity={edge.primary ? 1 : 0.2}
+          transparent
         />
       ))}
     </>
@@ -104,11 +157,14 @@ function UnitCellEdges({ latticeMatrix }: { latticeMatrix: [number, number, numb
 function Atoms({
   species,
   cartCoords,
+  latticeMatrix,
 }: {
   species: string[];
   cartCoords: [number, number, number][];
+  latticeMatrix: [number, number, number][];
 }) {
   const uniqueSpecies = useMemo(() => [...new Set(species)], [species]);
+  const offsets = useMemo(() => supercellOffsets(latticeMatrix), [latticeMatrix]);
 
   return (
     <>
@@ -119,30 +175,46 @@ function Atoms({
           .map((s, i) => (s === sym ? i : -1))
           .filter((i) => i >= 0);
 
-        return indices.map((idx) => (
-          <mesh key={idx} position={cartCoords[idx]}>
-            <sphereGeometry args={[radius, 24, 24]} />
-            <meshStandardMaterial color={color} roughness={0.4} metalness={0.3} />
-          </mesh>
-        ));
+        return offsets.map((o, oi) => {
+          const isPrimary = o[0] === 0 && o[1] === 0 && o[2] === 0;
+          return indices.map((idx) => (
+            <mesh
+              key={`${oi}-${idx}`}
+              position={[
+                cartCoords[idx][0] + o[0],
+                cartCoords[idx][1] + o[1],
+                cartCoords[idx][2] + o[2],
+              ]}
+            >
+              <sphereGeometry args={[radius, 24, 24]} />
+              <meshStandardMaterial
+                color={color}
+                roughness={0.4}
+                metalness={0.3}
+                transparent={!isPrimary}
+                opacity={isPrimary ? 1 : 0.3}
+              />
+            </mesh>
+          ));
+        });
       })}
     </>
   );
 }
 
-function StructureScene({ structure }: { structure: StructureData }) {
+export function StructureScene({ structure }: { structure: StructureData }) {
   const center = useMemo(() => {
     const [a, b, c] = structure.lattice_matrix;
     return [
-      (a[0] + b[0] + c[0]) / 2,
-      (a[1] + b[1] + c[1]) / 2,
-      (a[2] + b[2] + c[2]) / 2,
+      a[0] + b[0] + c[0],
+      a[1] + b[1] + c[1],
+      a[2] + b[2] + c[2],
     ] as [number, number, number];
   }, [structure.lattice_matrix]);
 
   const cameraDistance = useMemo(() => {
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 1.8;
+    return Math.max(a, b, c) * 3.0;
   }, [structure.lattice_params]);
 
   return (
@@ -151,8 +223,12 @@ function StructureScene({ structure }: { structure: StructureData }) {
       <directionalLight position={[5, 5, 5]} intensity={0.8} />
       <directionalLight position={[-3, -3, 2]} intensity={0.3} />
       <group position={[-center[0], -center[1], -center[2]]}>
-        <UnitCellEdges latticeMatrix={structure.lattice_matrix} />
-        <Atoms species={structure.species} cartCoords={structure.cart_coords} />
+        <SupercellEdges latticeMatrix={structure.lattice_matrix} />
+        <Atoms
+          species={structure.species}
+          cartCoords={structure.cart_coords}
+          latticeMatrix={structure.lattice_matrix}
+        />
       </group>
       <OrbitControls
         makeDefault
@@ -196,7 +272,7 @@ export function CrystalViewer({ elementA, elementB }: CrystalViewerProps) {
   const cameraDistance = useMemo(() => {
     if (!structure) return 10;
     const { a, b, c } = structure.lattice_params;
-    return Math.max(a, b, c) * 1.8;
+    return Math.max(a, b, c) * 3.0;
   }, [structure]);
 
   return (

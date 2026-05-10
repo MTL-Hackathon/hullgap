@@ -63,6 +63,17 @@ body {
   to { opacity: 1; }
 }
 
+@keyframes expandRow {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-fade-up {
   animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

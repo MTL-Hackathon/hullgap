@@ -62,6 +62,44 @@ export function Workspace() {
     else if (step === "viewer") setStep("validation");
   }, [step]);
 
+  // Sync step state with browser history so back/forward buttons work
+  const isRestoringRef = useRef(false);
+  const initializedHistoryRef = useRef(false);
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      isRestoringRef.current = false;
+      return;
+    }
+    const state = { step, hasCandidates: Boolean(candidates), hasMace: Boolean(maceResults) };
+    if (!initializedHistoryRef.current) {
+      // Replace the initial entry so we don't add an extra history item on mount
+      window.history.replaceState(state, "");
+      initializedHistoryRef.current = true;
+    } else if (window.history.state?.step !== step) {
+      window.history.pushState(state, "");
+    }
+  }, [step, candidates, maceResults]);
+
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      if (e.state?.step) {
+        isRestoringRef.current = true;
+        setStep(e.state.step);
+      } else {
+        // No app state — user is going back to before they started.
+        // Push current state back so the page doesn't break.
+        isRestoringRef.current = true;
+        window.history.pushState(
+          { step, hasCandidates: Boolean(candidates), hasMace: Boolean(maceResults) },
+          ""
+        );
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [step, candidates, maceResults]);
+
   const scrollToPeriodicTable = useCallback(() => {
     if (!assembled) setAssembled(true);
     const el = document.getElementById("periodic-table");
@@ -465,6 +503,8 @@ export function Workspace() {
                         originalIndices={filteredIndices}
                         onToggle={toggleSelect}
                         onToggleAll={toggleSelectAll}
+                        elementA={elementA}
+                        elementB={elementB}
                       />
                     </div>
                   </div>

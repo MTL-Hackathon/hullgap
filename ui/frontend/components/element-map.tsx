@@ -221,7 +221,8 @@ const N_COLS    = 18;
 const PAD       = 16;
 const GAP       = 2;
 const SCATTER_H = 560;
-const LERP      = 0.12;
+const LERP       = 0.14;
+const SHAPE_LERP = 0.22;
 const INACTIVE_ALPHA = 0.15;
 
 // ─── Scatter angle / spread per group ───────────────────────────────────
@@ -658,8 +659,11 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       const t = tgtRef.current[i];
       if (!t) return;
       const dx = t.x - p.x, dy = t.y - p.y;
-      if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) {
-        p.x += dx * LERP; p.y += dy * LERP;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.3) {
+        const speed = LERP + Math.min(dist / 800, 0.08);
+        p.x += dx * speed;
+        p.y += dy * speed;
         done = false;
       } else { p.x = t.x; p.y = t.y; }
     });
@@ -670,7 +674,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       const diff = target - o;
       if (Math.abs(diff) > 0.005) {
         const fast = (m !== "grid" && target === 0);
-        opacityRef.current[i] = o + diff * (fast ? 0.28 : LERP);
+        opacityRef.current[i] = o + diff * (fast ? 0.32 : LERP);
         done = false;
       } else {
         opacityRef.current[i] = target;
@@ -682,7 +686,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     shapeRef.current.forEach((s, i) => {
       const diff = shapeTarget - s;
       if (Math.abs(diff) > 0.005) {
-        shapeRef.current[i] = s + diff * LERP;
+        shapeRef.current[i] = s + diff * SHAPE_LERP;
         done = false;
       } else {
         shapeRef.current[i] = shapeTarget;
