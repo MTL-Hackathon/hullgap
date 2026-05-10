@@ -1,0 +1,99 @@
+chemsys,cod_id,formula,spacegroup,sg_number,a,b,c,vol,year,journal
+Bi-Ni,1519106,Bi Ni0.92,P m c m,51,8.1527,14.1209,5.3243,612.952,2000,Solid State Sciences
+Bi-Ni,4003074,Bi2 Ni,C 1 2/m 1,12,12.1135,3.83754,5.2749,240.778,2019,Chemistry of Materials
+Bi-Ni,4003075,Bi2 Ni,C 1 2/m 1,12,12.80484,4.04053,5.51174,279.94,2019,Chemistry of Materials
+Bi-Ni,7120700,Bi Ni,C m c m,63,3.3873,9.4079,3.7587,119.78,2017,Chem. Commun.
+Bi-Mn,1539584,Bi0.76 Mn0.876,P 2 2 21,17,4.334,7.505,5.959,193.826,1972,"Acta Chemica Scandinavica (1-27,1973-42,1988)"
+Bi-Mn,4002916,Bi2 Mn,I 4/m c m,140,6.83148,6.83148,5.6572,264.017,2019,Chemistry of Materials
+Bi-Mn,9008899,Bi Mn,P 63 m c,186,4.3,4.3,6.12,97.998,1963,Crystal Structures
+Co-Sb,1533757,Co Sb3,I m -3,204,9.118,9.118,9.118,758.052,2003,Journal of Applied Physics
+Co-Sb,1541039,Co Sb,P 63/m m c,194,3.9,3.9,5.172,68.127,1992,"Monatshefte fuer Chemie und verwandte Teile anderer Wissenschaften (109,1978-)"
+Co-Sb,1566759,Co Sb3,I m -3,204,9.036,9.036,9.036,737.783,2022,Journal of Synchrotron Radiation
+Co-Sb,9008885,Co Sb,P 63 m c,186,3.866,3.866,5.188,67.151,1963,Crystal Structures
+Co-Sb,9015513,Co Sb3,I m -3,204,9.0347,9.0347,9.0347,737.465,1974,Acta Chemica Scandinavica A
+Co-Te,1011357,Co Te2,P m n n,58,3.882,5.301,6.298,129.6,1938,Zeitschrift fuer Anorganische und Allgemeine Chemie
+Co-Te,1528121,Co0.63 Te,P 63/m m c,194,3.847,3.847,5.38,68.954,1992,"Monatshefte fuer Chemie (-108,1977)"
+Co-Te,9008887,Co Te,P 63 m c,186,3.886,3.886,5.36,70.097,1963,Crystal Structures
+Co-Se,1540201,Co2 Se2,P 63/m m c,194,3.62,3.62,5.2,59.013,1992,Journal of Magnetism and Magnetic Materials
+Co-Se,9008886,Co Se,P 63 m c,186,3.6294,3.6294,5.3006,60.468,1963,Crystal Structures
+Co-Se,9012536,Co Se2,P a -3,205,5.8593,5.8593,5.8593,201.158,1969,Acta Chemica Scandinavica
+Co-Se,9012803,Co3 Se4,C 1 2/m 1,12,12.1,3.57,6.183,229.584,2004,Solid State Sciences
+Co-Se,9012804,Co3 Se4,C 1 2/m 1,12,11.9309,3.5732,6.1359,228.062,2004,Solid State Sciences
+Co-Se,9012805,Co6.84 Se8,C 1 2/m 1,12,12.367,7.1402,8.079,459.184,2004,Solid State Sciences
+Co-Se,9012806,Co6.8 Se8,C 1 2/m 1,12,12.4039,7.1793,8.1756,468.924,2004,Solid State Sciences
+Bi-Mo,4135458,Bi2 Mo,I 4/m c m,140,6.4155,6.4155,5.488,225.88,2020,Journal of the American Chemical Society
+Si-Ti,1009012,Si2 Ti,F m m m,69,4.428,4.779,9.078,192.1,1998,Materials Research Society Symposia Proceedings
+Si-Ti,1010453,Si2 Ti,F d d d :1,70,8.236,4.773,8.523,335,1939,"Zeitschrift fuer Kristallographie, Kristallgeometrie, Kristallphysik, Kristallchemie (-144,1977)"
+Si-Ti,1532210,Si2 Ti,F d d d :1,70,8.268,4.8002,8.5521,339.416,2001,Materials Research Society Symposia Proceedings
+Si-Ti,1539473,Si Ti,P m m 2,25,3.618,6.492,4.973,116.806,1959,Zhurnal Neorganicheskoi Khimii
+Si-Ti,1541130,Si3 Ti5,P 63/m c m,193,7.465,7.465,5.162,249.12,1951,Journal of Metals
+Co-Si,1008148,Co Si2,F m -3 m,225,5.365,5.365,5.365,154.4,1950,Comptes Rendus Hebdomadaires des Seances de l'Academie des Sciences (1884 - 1965)
+Co-Si,1010036,Co Si,P 21 3,198,4.438,4.438,4.438,87.4,1933,"Arkiv foer Kemi, Mineralogi och Geologi, A"
+Co-Si,1010840,Co2 Si,,,7.095,4.908,3.73,129.9,1935,"Zeitschrift fuer Physikalische Chemie, Abteilung B: Chemie der Elementarprozesse, Aufbau der Materie"
+Co-Si,1524156,Co0.9 Si0.1,P 63/m m c,194,2.507,2.507,4.065,22.126,1983,Journal of Magnetism and Magnetic Materials
+Co-Si,1524831,Co0.85 Si0.15,F m -3 m,225,3.535,3.535,3.535,44.174,1963,Canadian Journal of Physics
+Co-Si,9009010,Co Si2,F m -3 m,225,5.356,5.356,5.356,153.646,1963,Crystal Structures
+Co-Si,9009209,Co2 Si,P b n m,62,7.109,4.918,3.738,130.688,1963,Crystal Structures
+Ni-Si,1522620,Ni0.92 Si0.08,F m -3 m,225,3.52,3.52,3.52,43.614,1985,Acta Metallurgica
+Ni-Si,1523551,Ni2 Si,P 63 2 2,182,3.836,3.836,4.948,63.055,1979,Journal of the Less-Common Metals
+Ni-Si,1532040,Ni Si,P n m a,62,5.1752,3.3321,5.6094,96.73,2002,Kristallografiya
+Ni-Si,1537763,Ni Si2,F m -3 m,225,5.406,5.406,5.406,157.989,1973,Kristall und Technik
+Ni-Si,1537795,Ni3 Si,P m -3 m,221,3.5511,3.5511,3.5511,44.78,1978,Zeitschrift fuer Metallkunde
+Ni-Si,1538633,Ni3 Si,P m -3 m,221,3.542,3.542,3.542,44.437,1986,Transactions of the Japan Institute of Metals
+Ni-Si,1538921,Ni3.4 Si0.6,F m -3 m,225,3.516,3.516,3.516,43.466,1983,Zeitschrift fuer Metallkunde
+Ni-Si,1539334,Ni Si2,F m -3 m,225,5.383,5.383,5.383,155.982,1961,"Monatshefte fuer Chemie und verwandte Teile anderer Wissenschaften (109,1978-)"
+Ni-Si,2106046,Ni31 Si12,P 3 2 1,150,6.671,6.671,12.288,473.58,1971,"Acta Crystallographica B (24,1968-38,1982)"
+Ni-Si,2300376,Ni Si,P 21 3,198,4.49678,4.49678,4.49678,90.9295,2013,Journal of Applied Crystallography
+Ni-Si,2300377,Ni Si,P m m n :2,59,3.2735,3.02662,4.69776,46.544,2013,Journal of Applied Crystallography
+Ni-Si,2300558,Ni Si,P n m a,62,5.1731,3.3381,5.6049,96.79,2015,Journal of Applied Crystallography
+Ni-Si,2310975,Ni Si,P n m a,62,5.18,3.34,5.62,97.233,1951,"Acta Crystallographica (1,1948-23,1967)"
+Ni-Si,2310976,Ni2 Si,P n m a,62,4.99,3.72,7.06,131.053,1952,"Acta Crystallographica (1,1948-23,1967)"
+Ni-Si,2310985,Ni2 Si,P b n m,62,7.06,4.99,3.72,131.053,1952,"Acta Crystallographica (1,1948-23,1967)"
+Ni-Si,2310986,Ni2 Si,P 63/m m c,194,3.805,3.805,4.89,61.312,1952,"Acta Crystallographica (1,1948-23,1967)"
+Ni-Si,9009024,Ni Si2,F m -3 m,225,5.395,5.395,5.395,157.027,1963,Crystal Structures
+Ni-Si,9009210,Ni2 Si,P b n m,62,7.03,4.99,3.72,130.496,1963,Crystal Structures
+Hf-N,1533300,Hf3 N4,I -4 3 d,220,6.701,6.701,6.701,300.898,2003,Nature Materials
+Hf-N,1539063,Hf N,F m -3 m,225,4.518,4.518,4.518,92.223,1970,Metallurgical Transactions
+Hf-N,1539404,Hf N,F m -3 m,225,4.512,4.512,4.512,91.856,1967,Journal of Applied Physics
+Hf-N,1539500,Hf N,F m -3 m,225,4.55,4.55,4.55,94.196,1994,Journal of Alloys Compd.
+N-Zr,1011361,N Zr,F m -3 m,225,4.63,4.63,4.63,99.3,1925,Zeitschrift fuer Physik
+N-Zr,1533301,N4 Zr3,I -4 3 d,220,6.74,6.74,6.74,306.182,2003,Nature Materials
+N-Zr,1538058,N Zr,F m -3 m,225,4.578,4.578,4.578,95.946,1975,"Monatshefte fuer Chemie und verwandte Teile anderer Wissenschaften (109,1978-)"
+N-Zr,1539259,N Zr,F m -3 m,225,4.537,4.537,4.537,93.391,1954,"Acta Chemica Scandinavica (1-27,1973-42,1988)"
+N-Zr,1539488,N Zr,F m -3 m,225,4.6,4.6,4.6,97.336,1994,Journal of Alloys Compd.
+N-Zr,4303939,N Zr,F m -3 m,225,4.55929,4.55929,4.55929,94.775,2009,Inorganic Chemistry
+N-Zr,4303942,N Zr,F m -3 m,225,4.5627,4.5627,4.5627,94.987,2009,Inorganic Chemistry
+N-Zr,4303945,N Zr,F m -3 m,225,4.56847,4.56847,4.56847,95.348,2009,Inorganic Chemistry
+N-Zr,9008778,N Zr,F m -3 m,225,4.61,4.61,4.61,97.972,1963,Crystal Structures
+N-Ta,1005006,N5 Ta3,C m c m,63,3.8862,10.2118,10.2624,407.3,1991,"Acta Crystallographica C (39,1983-)"
+N-Ta,1523630,N Ta,P 63/m m c,194,3.048,3.048,4.918,39.568,1969,Revue Internationale des Hautes Temperatures et des Refractaires
+N-Ta,1527256,N0.43 Ta,P -3 1 m,162,5.285,5.285,4.919,118.986,1977,Journal of Solid State Chemistry
+N-Ta,1528098,N5 Ta3,C m c m,63,3.893,10.264,10.264,410.126,1973,Zeitschrift fuer Anorganische und Allgemeine Chemie
+N-Ta,1538016,N Ta,P -6 m 2,187,2.938,2.938,2.883,21.552,1969,Revue Internationale des Hautes Temperatures et des Refractaires
+N-Ta,1538884,N Ta0.83,F m -3 m,225,4.33,4.33,4.33,81.183,1975,Physics of Metals and Metallography
+N-Ta,1539256,N Ta,P 6/m m m,191,5.185,5.185,2.908,67.705,1954,"Acta Chemica Scandinavica (1-27,1973-42,1988)"
+N-Ta,1542116,N6 Ta5,P 63/m c m,193,5.176,5.176,10.353,240.207,1969,Revue Internationale des Hautes Temperatures et des Refractaires
+N-Ta,2106407,N Ta,P -6 2 m,189,5.196,5.196,2.911,68.063,1978,"Acta Crystallographica B (24,1968-38,1982)"
+N-Ta,2310957,N Ta,F m -3 m,225,4.358,4.358,4.358,82.768,1975,"Acta Crystallographica A (24,1968-38,1982)"
+N-Ta,9008876,N Ta,P 63 m c,186,3.05,3.05,4.94,39.798,1963,Crystal Structures
+N-Ta,9008975,N Ta,P 6/m m m,191,5.191,5.191,2.908,67.862,1963,Crystal Structures
+N-Ti,1011099,N Ti,F m -3 m,225,4.244,4.244,4.244,76.4,1939,Acta Physicochimica (USSR)
+N-Ti,1011100,N0.88 Ti0.88,F m -3 m,225,4.22,4.22,4.22,75.2,1939,Acta Physicochimica (USSR)
+N-Ti,1011101,N Ti,F m -3 m,225,4.32,4.32,4.32,80.6,1924,"Physica (Amsterdam) (1,1921-13,1933)"
+N-Ti,1011102,N Ti,F m -3 m,225,4.225,4.225,4.225,75.4,1936,Archiv fuer das Eisenhuettenwesen
+N-Ti,1011316,N Ti,F m -3 m,225,4.4,4.4,4.4,85.2,1925,Zeitschrift fuer Physik
+N-Ti,1100029,N Ti2,I 41/a m d :2,141,4.14,4.14,8.805,150.9,1969,"Comptes Rendus Hebdomadaires des Seances de l'Academie des Sciences, Serie C, Sciences Chimiques (1966-)"
+N-Ti,1100030,N Ti2,I 41/a m d :2,141,4.1493,4.1493,8.7858,151.3,1985,"Acta Crystallographica, Section C: Crystal Structure Communications"
+N-Ti,1100031,N Ti2,P 42/m n m,136,4.9452,4.9452,3.0342,74.2,1962,"Acta Chemica Scandinavica (1-27,1973-42,1988)"
+N-Ti,1100032,N1.29 Ti3,R -3 m :H,166,2.9809,2.9809,21.6642,170.5,1986,Journal of the Less-Common Metals
+N-Ti,1100033,N Ti,F m -3 m,225,4.242,4.242,4.242,76.3,1948,Fiat Review of German Science
+N-Ti,1100034,N Ti,F m -3 m,225,4.244,4.244,4.244,76.4,1941,Mineralogical Magazine (1969-)
+N-Ti,1100036,N Ti,F m -3 m,225,4.238,4.238,4.238,76.1,1954,"Acta Chemica Scandinavica (1-27,1973-42,1988)"
+N-Ti,1100037,N0.9 Ti,F m -3 m,225,4.239,4.239,4.239,76.2,1978,"Acta Chemica Scandinavica, Series A: (28,1974-)"
+N-Ti,1100039,N Ti0.76,F m -3 m,225,4.235,4.235,4.235,76,1975,Acta Chemica Scandinavica
+N-Ti,1100041,N0.61 Ti,I 41/a m d :1,141,4.198,4.198,8.591,151.4,1977,Journal of Applied Crystallography
+N-Ti,1101045,N Ti,F m -3 m,225,4.244,4.244,4.244,76.4,1948,Fiat Review of German Science
+N-Ti,1101047,N2.333 Ti4,R -3 m :H,166,2.9795,2.9795,28.96492,227.8,1986,Journal of the Less-Common Metals
+N-Ti,1101081,N Ti,F m -3 m,,4.241,4.241,4.241,76.28,,
+N-Ti,1538607,N1.29 Ti3,R -3 m :H,166,2.9809,2.9809,2.16642,16.671,1986,Journal of the Less-Common Metals
+N-Ti,9008748,N Ti,F m -3 m,225,4.235,4.235,4.235,75.956,1963,Crystal Structures

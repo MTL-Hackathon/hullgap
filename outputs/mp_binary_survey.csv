@@ -1,0 +1,18 @@
+system,n_mp_entries,n_stable_mp,n_unique_stoich,min_energy_above_hull,stable_formulas,stable_spacegroups,has_zero_stable_phases,microelectronics_tag,void_score,neighbour_stable_count,void_score_adj
+Bi-Co,2,0,2,0.047421941249999,(none),(none),True,,6.0,4,8.0
+Bi-W,0,0,0,,(none),(none),True,,7.0,0,7.0
+Bi-Ru,0,0,0,,(none),(none),True,,7.0,0,7.0
+Bi-Fe,0,0,0,,(none),(none),True,,7.0,0,7.0
+Bi-Ni,5,0,3,0.026048007500001,(none),(none),True,,5.0,1,5.5
+Bi-Mo,4,0,4,0.32148761315789903,(none),(none),True,,5.0,0,5.0
+Co-Si,6,3,5,0.0,"Co2Si, CoSi, CoSi2","Fm-3m, P2_13, Pnma",False,silicide/contact,2.0,5,4.5
+Bi-Mn,6,0,3,0.207830463534477,(none),(none),True,,4.0,0,4.0
+Co-Sb,4,1,3,0.0,CoSb3,Im-3,False,,2.0,3,3.5
+Si-Ti,14,4,7,0.0,"Ti5Si3, Ti5Si4, TiSi, TiSi2","Cmcm, P4_12_12, P6_3/mcm, Pnma",False,silicide/contact,2.0,3,3.5
+Ni-Si,11,4,7,0.0,"Si2Ni, SiNi, SiNi2, SiNi3","Fm-3m, Pm-3m, Pnma",False,silicide/contact,2.0,2,3.0
+N-Ti,16,2,8,0.0,"Ti2N, TiN","Fm-3m, P4_2/mnm",False,nitride/barrier,1.0,4,3.0
+Co-Se,11,2,7,0.0,"Co3Se4, CoSe2","Fd-3m, Pnnm",False,,1.0,3,2.5
+Co-Te,7,1,5,0.0,CoTe2,Pnnm,False,,1.0,3,2.5
+Hf-N,16,4,6,0.0,"Hf2N, Hf3N2, Hf3N4, HfN","Fm-3m, P4_2/mnm, Pnma, R-3m",False,nitride/barrier,1.0,3,2.5
+N-Zr,19,3,6,0.0,"Zr2N, Zr3N4, ZrN","Fm-3m, P4_2/mnm, Pnma",False,nitride/barrier,1.0,3,2.5
+N-Ta,28,3,9,0.0,"Ta2N, Ta3N5, TaN","Cmcm, P-31m, P-62m",False,nitride/barrier,1.0,3,2.5
