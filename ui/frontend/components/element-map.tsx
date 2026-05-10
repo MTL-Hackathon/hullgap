@@ -1465,6 +1465,30 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
                     </li>
                   </ul>
                 </div>
+                <div className="mb-3">
+                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                    Connection lines
+                  </div>
+                  <div className="mb-2 leading-snug text-[var(--muted)]">
+                    Shown once an anchor element is selected. Each line ties the anchor to another element; thickness and shade encode the number of known binary compounds between them (Materials Project).
+                  </div>
+                  <ul className="space-y-1">
+                    {[
+                      { label: "15 or more compounds", width: 3.5, color: "rgba(40,40,40,0.70)" },
+                      { label: "9–14",                 width: 2.5, color: "rgba(70,70,70,0.55)" },
+                      { label: "5–8",                  width: 1.8, color: "rgba(100,100,100,0.40)" },
+                      { label: "3–4",                  width: 1.2, color: "rgba(140,140,140,0.28)" },
+                      { label: "1–2",                  width: 0.8, color: "rgba(180,180,180,0.18)" },
+                    ].map(s => (
+                      <li key={s.label} className="flex items-center gap-2 text-[var(--muted)]">
+                        <svg width="44" height="8" viewBox="0 0 44 8" className="shrink-0" aria-hidden="true">
+                          <line x1="2" y1="4" x2="42" y2="4" stroke={s.color} strokeWidth={s.width} strokeLinecap="round" />
+                        </svg>
+                        <span>{s.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
                 <div>
                   <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                     Categories
