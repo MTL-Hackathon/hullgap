@@ -524,6 +524,7 @@ export function Workspace() {
                         onToggleAll={toggleSelectAll}
                         elementA={elementA}
                         elementB={elementB}
+                        mpPhases={mpPhases}
                       />
                     </div>
                   </div>

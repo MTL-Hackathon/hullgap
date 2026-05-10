@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { Canvas } from "@react-three/fiber";
-import type { CandidateResult, StructureData } from "@/lib/types";
+import type { CandidateResult, MpPhase, StructureData } from "@/lib/types";
 import { fetchStructure, fetchStructureByIdx } from "@/lib/api-client";
 import {
   StructureScene,
@@ -15,6 +15,8 @@ const subscribeNoop = () => () => {};
 const getClientSnapshot = () => true;
 const getServerSnapshot = () => false;
 
+type ExpandMode = "details" | "compare";
+
 interface Props {
   candidates: CandidateResult[];
   selected: Set<number>;
@@ -23,16 +25,277 @@ interface Props {
   onToggleAll: () => void;
   elementA: string;
   elementB: string;
+  mpPhases: MpPhase[];
+}
+
+function gcd(a: number, b: number): number {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  while (b) {
+    [a, b] = [b, a % b];
+  }
+  return a || 1;
+}
+
+function reducedComposition(formula: string): Record<string, number> {
+  const re = /([A-Z][a-z]?)(\d*)/g;
+  const counts: Record<string, number> = {};
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(formula)) !== null) {
+    if (!m[1]) continue;
+    const n = m[2] ? parseInt(m[2], 10) : 1;
+    counts[m[1]] = (counts[m[1]] || 0) + n;
+  }
+  const values = Object.values(counts);
+  if (values.length === 0) return counts;
+  const g = values.reduce((a, b) => gcd(a, b));
+  if (g <= 1) return counts;
+  for (const k of Object.keys(counts)) counts[k] = counts[k] / g;
+  return counts;
+}
+
+function compositionsEqual(
+  a: Record<string, number>,
+  b: Record<string, number>,
+): boolean {
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => a[k] === b[k]);
+}
+
+function findMpMatch(
+  candidate: CandidateResult,
+  mpPhases: MpPhase[],
+): MpPhase | null {
+  if (!mpPhases.length) return null;
+  const target = reducedComposition(candidate.formula);
+  const matches = mpPhases.filter((p) =>
+    compositionsEqual(reducedComposition(p.formula), target),
+  );
+  if (!matches.length) return null;
+  // Prefer the lowest-energy MP entry for this composition.
+  return matches.reduce((best, p) =>
+    p.formation_energy < best.formation_energy ? p : best,
+  );
+}
+
+function relAgreement(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+  const denom = Math.max(Math.abs(a), Math.abs(b), 1e-6);
+  return Math.max(0, 1 - Math.abs(a - b) / denom);
+}
+
+function agreementScore(candidate: CandidateResult, mp: MpPhase): number {
+  const parts: number[] = [];
+  const fe = relAgreement(candidate.formation_energy_eV_atom, mp.formation_energy);
+  if (fe != null) parts.push(fe);
+  const eh = relAgreement(candidate.e_above_hull_eV_atom, mp.e_above_hull);
+  if (eh != null) parts.push(eh);
+  parts.push(
+    candidate.crystal_system && mp.crystal_system &&
+      candidate.crystal_system.toLowerCase() === mp.crystal_system.toLowerCase()
+      ? 1
+      : 0,
+  );
+  if (!parts.length) return 0;
+  return parts.reduce((s, v) => s + v, 0) / parts.length;
+}
+
+function ComparisonCell({
+  label,
+  candidate,
+  mp,
+  unit,
+  digits = 4,
+}: {
+  label: string;
+  candidate: number | string | null | undefined;
+  mp: number | string | null | undefined;
+  unit?: string;
+  digits?: number;
+}) {
+  const fmt = (v: number | string | null | undefined) => {
+    if (v == null) return "—";
+    if (typeof v === "number") {
+      if (!Number.isFinite(v)) return "—";
+      return v.toFixed(digits);
+    }
+    return v;
+  };
+  let agree: number | null = null;
+  if (typeof candidate === "number" && typeof mp === "number") {
+    agree = relAgreement(candidate, mp);
+  } else if (typeof candidate === "string" && typeof mp === "string") {
+    agree = candidate.toLowerCase() === mp.toLowerCase() ? 1 : 0;
+  }
+  const tone =
+    agree == null
+      ? "text-slate-400"
+      : agree >= 0.95
+        ? "text-emerald-600"
+        : agree >= 0.8
+          ? "text-amber-600"
+          : "text-rose-600";
+  return (
+    <>
+      <div className="font-medium text-[var(--foreground)]">{label}</div>
+      <div className="tabular-nums text-slate-700">
+        {fmt(candidate)}
+        {unit && candidate != null ? ` ${unit}` : ""}
+      </div>
+      <div className="tabular-nums text-slate-700">
+        {fmt(mp)}
+        {unit && mp != null ? ` ${unit}` : ""}
+      </div>
+      <div className={`tabular-nums text-right ${tone}`}>
+        {agree == null ? "—" : `${(agree * 100).toFixed(1)}%`}
+      </div>
+    </>
+  );
+}
+
+function ComparisonView({
+  candidate,
+  mp,
+  structure,
+}: {
+  candidate: CandidateResult;
+  mp: MpPhase;
+  structure: StructureData | null;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Comparison with Materials Project ({mp.id})
+        </h4>
+        <span className="text-xs font-semibold text-[var(--accent-dark)]">
+          Overall agreement: {(agreementScore(candidate, mp) * 100).toFixed(1)}%
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[1.1fr_1fr_1fr_0.6fr] gap-x-4 gap-y-2 text-sm">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Quantity
+        </div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Candidate
+        </div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          MP
+        </div>
+        <div className="text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Agreement
+        </div>
+
+        <ComparisonCell
+          label="Formula"
+          candidate={candidate.formula}
+          mp={mp.formula}
+        />
+        <ComparisonCell
+          label="Crystal system"
+          candidate={candidate.crystal_system}
+          mp={mp.crystal_system}
+        />
+        <ComparisonCell
+          label="Formation energy"
+          candidate={candidate.formation_energy_eV_atom}
+          mp={mp.formation_energy}
+          unit="eV/atom"
+        />
+        <ComparisonCell
+          label="E above hull"
+          candidate={candidate.e_above_hull_eV_atom}
+          mp={mp.e_above_hull}
+          unit="eV/atom"
+        />
+        <ComparisonCell
+          label="x(B)"
+          candidate={candidate.x_B}
+          mp={null}
+        />
+        <ComparisonCell
+          label="Atoms in cell"
+          candidate={candidate.n_atoms}
+          mp={mp.n_sites}
+          digits={0}
+        />
+        <ComparisonCell
+          label="Volume"
+          candidate={structure?.volume ?? null}
+          mp={mp.volume}
+          unit="Å³"
+          digits={2}
+        />
+        <ComparisonCell
+          label="a"
+          candidate={structure?.lattice_params.a ?? null}
+          mp={mp.a}
+          unit="Å"
+          digits={3}
+        />
+        <ComparisonCell
+          label="b"
+          candidate={structure?.lattice_params.b ?? null}
+          mp={mp.b}
+          unit="Å"
+          digits={3}
+        />
+        <ComparisonCell
+          label="c"
+          candidate={structure?.lattice_params.c ?? null}
+          mp={mp.c}
+          unit="Å"
+          digits={3}
+        />
+        <ComparisonCell
+          label="α"
+          candidate={structure?.lattice_params.alpha ?? null}
+          mp={mp.alpha}
+          unit="°"
+          digits={2}
+        />
+        <ComparisonCell
+          label="β"
+          candidate={structure?.lattice_params.beta ?? null}
+          mp={mp.beta}
+          unit="°"
+          digits={2}
+        />
+        <ComparisonCell
+          label="γ"
+          candidate={structure?.lattice_params.gamma ?? null}
+          mp={mp.gamma}
+          unit="°"
+          digits={2}
+        />
+      </div>
+      {structure == null && (
+        <p className="text-xs text-slate-400">
+          Lattice parameters and volume become available once the structure has
+          loaded.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function ExpandedRow({
   candidate,
   elementA,
   elementB,
+  mode,
+  mpMatch,
+  colSpan,
 }: {
   candidate: CandidateResult;
   elementA: string;
   elementB: string;
+  mode: ExpandMode;
+  mpMatch: MpPhase | null;
+  colSpan: number;
 }) {
   const mounted = useSyncExternalStore(subscribeNoop, getClientSnapshot, getServerSnapshot);
   const [structure, setStructure] = useState<StructureData | null>(null);
@@ -74,11 +337,18 @@ function ExpandedRow({
 
   return (
     <tr>
-      <td colSpan={8} className="p-0">
+      <td colSpan={colSpan} className="p-0">
         <div
           className="border-t border-dashed border-slate-200 bg-slate-50/60 px-5 py-5"
           style={{ animation: "expandRow 0.2s ease-out" }}
         >
+          {mode === "compare" && mpMatch ? (
+            <ComparisonView
+              candidate={candidate}
+              mp={mpMatch}
+              structure={structure}
+            />
+          ) : (
           <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
             {/* Left: details */}
             <div className="space-y-4">
@@ -232,6 +502,7 @@ function ExpandedRow({
               </div>
             </div>
           </div>
+          )}
         </div>
       </td>
     </tr>
@@ -246,14 +517,25 @@ export function CandidateTable({
   onToggleAll,
   elementA,
   elementB,
+  mpPhases,
 }: Props) {
   const allSelected =
     candidates.length > 0 && originalIndices.every((i) => selected.has(i));
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<{ idx: number; mode: ExpandMode } | null>(null);
 
-  const toggleExpand = useCallback((origIdx: number) => {
-    setExpandedIdx((prev) => (prev === origIdx ? null : origIdx));
+  const mpMatches = useMemo(() => {
+    return candidates.map((c) => findMpMatch(c, mpPhases));
+  }, [candidates, mpPhases]);
+
+  const toggleExpand = useCallback((origIdx: number, mode: ExpandMode) => {
+    setExpanded((prev) => {
+      if (!prev || prev.idx !== origIdx) return { idx: origIdx, mode };
+      if (prev.mode !== mode) return { idx: origIdx, mode };
+      return null;
+    });
   }, []);
+
+  const colSpan = 10;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
@@ -275,12 +557,24 @@ export function CandidateTable({
             <th className="px-4 py-3 font-medium">x(B)</th>
             <th className="px-4 py-3 font-medium">Form. E (eV/at)</th>
             <th className="px-4 py-3 font-medium">Stable?</th>
+            <th className="px-4 py-3 font-medium">In MP</th>
+            <th className="px-4 py-3 font-medium">Agreement</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
           {candidates.map((c, localIdx) => {
             const origIdx = originalIndices[localIdx];
-            const isExpanded = expandedIdx === origIdx;
+            const isExpanded = expanded?.idx === origIdx;
+            const mp = mpMatches[localIdx];
+            const agreement = mp ? agreementScore(c, mp) : null;
+            const agreementTone =
+              agreement == null
+                ? "text-slate-400"
+                : agreement >= 0.95
+                  ? "text-emerald-600"
+                  : agreement >= 0.8
+                    ? "text-amber-600"
+                    : "text-rose-600";
 
             return (
               <Fragment key={`${c.composition}-${origIdx}`}>
@@ -292,7 +586,7 @@ export function CandidateTable({
                         ? "bg-[var(--accent-dim)]/50"
                         : "bg-white hover:bg-slate-50"
                   }`}
-                  onClick={() => toggleExpand(origIdx)}
+                  onClick={() => toggleExpand(origIdx, "details")}
                 >
                   <td className="px-3 py-3 text-slate-400">
                     <ChevronRight
@@ -331,12 +625,49 @@ export function CandidateTable({
                       </span>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {mp ? (
+                      <span
+                        className="inline-flex items-center rounded-full bg-[var(--accent-dim)] px-2 py-0.5 text-xs font-semibold text-[var(--accent-dark)]"
+                        title={`Match: ${mp.id} (${mp.formula})`}
+                      >
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-400">
+                        No
+                      </span>
+                    )}
+                  </td>
+                  <td
+                    className="px-4 py-3"
+                    onClick={(e) => {
+                      if (!mp) return;
+                      e.stopPropagation();
+                      toggleExpand(origIdx, "compare");
+                    }}
+                  >
+                    {agreement == null ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={`tabular-nums font-semibold underline-offset-4 hover:underline ${agreementTone}`}
+                        title="Click to compare every value with Materials Project"
+                      >
+                        {(agreement * 100).toFixed(1)}%
+                      </button>
+                    )}
+                  </td>
                 </tr>
                 {isExpanded && (
                   <ExpandedRow
                     candidate={c}
                     elementA={elementA}
                     elementB={elementB}
+                    mode={expanded?.mode ?? "details"}
+                    mpMatch={mp}
+                    colSpan={colSpan}
                   />
                 )}
               </Fragment>

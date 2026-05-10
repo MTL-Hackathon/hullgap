@@ -404,6 +404,9 @@ export function BrotWorkspace() {
                         originalIndices={filteredIndices}
                         onToggle={toggleSelect}
                         onToggleAll={toggleSelectAll}
+                        elementA={elementA}
+                        elementB={elementB}
+                        mpPhases={[]}
                       />
                     </div>
                   </div>
