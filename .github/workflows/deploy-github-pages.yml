@@ -1,5 +1,7 @@
-# Build the Next.js UI as a static export and deploy to GitHub Pages.
-# Settings → Pages → Source: GitHub Actions.
+# Build the Next.js static export and publish to the gh-pages branch.
+# Pages source: Settings → Pages → Build and deployment → Deploy from a branch
+# → Branch gh-pages, folder / (root). This avoids the GitHub Actions "artifact"
+# Pages API (deploy-pages) which returns 404 for some orgs / policies.
 name: Deploy GitHub Pages
 
 on:
@@ -8,16 +10,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,16 +50,9 @@ jobs:
           npm ci
           npm run build
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Push to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: ui/frontend/out
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ui/frontend/out
+          force_orphan: true

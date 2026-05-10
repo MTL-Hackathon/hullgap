@@ -69,17 +69,18 @@ Open http://localhost:3000.
 
 ### GitHub Pages (static demo)
 
-The workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) exports the Next.js UI as static HTML, bundles hull CSVs and relaxed CIFs from `data/results` and `data/mattergen`, and deploys to GitHub Pages on pushes to `main`.
+The workflow [.github/workflows/deploy-github-pages.yml](.github/workflows/deploy-github-pages.yml) exports the Next.js UI as static HTML, bundles hull CSVs and relaxed CIFs from `data/results` and `data/mattergen`, and **pushes the `out/` folder to the `gh-pages` branch** on every push to `main` (using [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages)).
 
-**Enable Pages (required once, or deploy returns HTTP 404):**
+**Enable Pages (one-time):**
 
-1. Repo **Settings → Pages** (or org policy must allow Pages for this repo).
-2. Under **Build and deployment**, set **Source** to **GitHub Actions** (not “Deploy from a branch”). Save if prompted.
-3. Re-run the workflow (**Actions → Deploy GitHub Pages → Run workflow**) or push to `main` again.
+1. Open **Settings → Pages** for the repository.
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
+3. Choose branch **`gh-pages`**, folder **`/ (root)`**, and save.
+4. After the next successful workflow run, the site is available at `https://<owner>.github.io/<repo>/` (or your custom domain).
 
-If the **deploy** job still fails with `HttpError: Not Found` / “Ensure GitHub Pages has been enabled”, an org owner may need to allow GitHub Pages for the organization, or (for forks) Pages may be disabled—use the upstream repo or a non-fork copy. Private repos need a plan that includes GitHub Pages.
+If your organization blocks pushing to `gh-pages` or restricts **Workflow permissions**, set **Settings → Actions → General → Workflow permissions** to allow read/write for workflows that need `contents: write` (this workflow only uses `GITHUB_TOKEN` to push that branch).
 
-Project sites use base path `/<repository-name>` automatically. For a repository named `username.github.io`, the workflow sets an empty base path (site served at the domain root).
+Project sites use base path `/<repository-name>` automatically (see the workflow’s `NEXT_PUBLIC_BASE_PATH` step). For a repository named `username.github.io`, the workflow sets an empty base path (site served at the domain root).
 
 Local static build:
 
