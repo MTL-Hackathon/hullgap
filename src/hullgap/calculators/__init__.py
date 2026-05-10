@@ -7,16 +7,18 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
-AVAILABLE_MODELS = ("chgnet", "mace")
+AVAILABLE_MODELS = ("chgnet", "mace", "mattersim")
 
 
-def get_calculator(model: str = "chgnet") -> Calculator:
+def get_calculator(model: str = "chgnet", **kwargs) -> Calculator:
     """Return an ASE-compatible calculator for the requested MLIP backend.
 
     Parameters
     ----------
     model
-        One of ``"chgnet"`` or ``"mace"``.
+        One of ``"chgnet"``, ``"mace"``, or ``"mattersim"``.
+    **kwargs
+        Forwarded to the backend factory (e.g. ``device`` for MatterSim).
 
     Raises
     ------
@@ -34,6 +36,10 @@ def get_calculator(model: str = "chgnet") -> Calculator:
         from hullgap.calculators.mace_calc import get_mace_calculator
 
         return get_mace_calculator()
+    if model == "mattersim":
+        from hullgap.calculators.mattersim_calc import get_mattersim_calculator
+
+        return get_mattersim_calculator(**kwargs)
     raise ValueError(
         f"Unknown model {model!r}. Available: {', '.join(AVAILABLE_MODELS)}"
     )

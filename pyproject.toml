@@ -29,6 +29,10 @@ dependencies = [
 mace = [
     "mace-torch>=0.3",
 ]
+matter = [
+    "mattergen",
+    "mattersim",
+]
 notebook = [
     "jupyterlab>=4.0",
     "ipykernel>=6.0",
@@ -38,7 +42,7 @@ ui = [
     "plotly>=5.18",
 ]
 all = [
-    "hullgap[mace,notebook,ui]",
+    "hullgap[mace,matter,notebook,ui]",
 ]
 
 [project.urls]
