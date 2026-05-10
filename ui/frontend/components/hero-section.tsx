@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
 
 interface Props {
@@ -8,23 +7,9 @@ interface Props {
 }
 
 export function HeroSection({ onGetStarted }: Props) {
-  const heroRef = useRef<HTMLElement>(null);
-  const [heroMouse, setHeroMouse] = useState({ x: 0, y: 0, hovered: false });
-
   return (
     <section
-      ref={heroRef}
       className="relative z-[20] flex min-h-[calc(100vh-49px)] flex-col items-center justify-center overflow-hidden px-4 pb-10 pt-20 text-center"
-      onMouseMove={(e) => {
-        if (!heroRef.current) return;
-        const r = heroRef.current.getBoundingClientRect();
-        setHeroMouse({
-          x: ((e.clientX - r.left) / r.width) * 2 - 1,
-          y: -((e.clientY - r.top) / r.height) * 2 + 1,
-          hovered: true,
-        });
-      }}
-      onMouseLeave={() => setHeroMouse({ x: 0, y: 0, hovered: false })}
     >
       <div className="relative z-10 flex flex-col items-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -34,20 +19,10 @@ export function HeroSection({ onGetStarted }: Props) {
           className="mb-8 h-28 w-28 rounded-2xl object-contain sm:h-36 sm:w-36"
         />
         <h1 className="max-w-2xl text-[44px] font-semibold tracking-[-0.03em] text-[var(--foreground)] sm:text-[68px] sm:leading-[0.93]">
-          <span
-            className="block transition-transform duration-700 ease-out"
-            style={{
-              transform: `translate(${heroMouse.x * -18}px, ${heroMouse.y * -10}px)`,
-            }}
-          >
+          <span className="block">
             Matter
           </span>
-          <span
-            className="block text-[var(--accent)] transition-transform duration-700 ease-out"
-            style={{
-              transform: `translate(${heroMouse.x * -8}px, ${heroMouse.y * -5}px)`,
-            }}
-          >
+          <span className="block text-[var(--accent)]">
             of Fact
           </span>
         </h1>

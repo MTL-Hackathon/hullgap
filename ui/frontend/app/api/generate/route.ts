@@ -65,7 +65,7 @@ async function loadHullCSV(elementA: string, elementB: string) {
         formation_energy_eV_atom: parseFloat(row.e_form_eV_atom),
         e_above_hull_eV_atom: parseFloat(row.e_above_hull_eV_atom),
         predicted_stable: row.on_hull === "True",
-        crystal_system: "Unknown",
+        crystal_system: row.crystal_system || "Unknown",
       }));
     } catch {
       continue;

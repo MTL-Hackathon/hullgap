@@ -31,9 +31,18 @@ export function HullChart({ data, elementA, elementB, title }: Props) {
   const onHull = data.filter((d) => d.stable);
   const aboveHull = data.filter((d) => !d.stable);
 
+  const hullLineInner = (() => {
+    const byX = new Map<number, HullPoint>();
+    for (const pt of onHull) {
+      const prev = byX.get(pt.x_B);
+      if (!prev || pt.energy < prev.energy) byX.set(pt.x_B, pt);
+    }
+    return Array.from(byX.values()).sort((a, b) => a.x_B - b.x_B);
+  })();
+
   const hullLine = [
     { x_B: 0, energy: 0 },
-    ...onHull.sort((a, b) => a.x_B - b.x_B),
+    ...hullLineInner,
     { x_B: 1, energy: 0 },
   ];
 

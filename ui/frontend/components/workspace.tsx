@@ -52,7 +52,7 @@ export function Workspace() {
     if (!assembled) setAssembled(true);
     const el = document.getElementById("periodic-table");
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - 56;
+    const top = el.getBoundingClientRect().top + window.scrollY - 120;
     window.scrollTo({ top, behavior: "smooth" });
   }, [assembled]);
 
