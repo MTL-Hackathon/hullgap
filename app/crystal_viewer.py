@@ -25,6 +25,7 @@ if str(REPO / "src") not in sys.path:
 
 RESULTS_DIR = REPO / "data" / "results"
 RELAXED_DIR = REPO / "data" / "relaxed"
+MATTERGEN_DIR = REPO / "data" / "mattergen"
 DFT_DIR = REPO / "dft"
 
 RADII = {"Co": 1.25, "Bi": 1.55}
@@ -32,10 +33,12 @@ RADII = {"Co": 1.25, "Bi": 1.55}
 ELEMENT_COLORS = {
     "Co": "#3366cc", "Bi": "#cc6633", "Ni": "#228b22", "Sb": "#8b008b",
     "Fe": "#b22222", "Mn": "#ff8c00", "Cr": "#4682b4", "Ti": "#708090",
+    "Li": "#cc80ff", "O": "#ff4040", "Ru": "#248f8f", "W": "#2194d6",
 }
 
 ELEMENT_SIZES = {
     "Co": 8, "Bi": 12, "Ni": 8, "Sb": 11, "Fe": 8, "Mn": 8, "Cr": 8, "Ti": 9,
+    "Li": 7, "O": 6, "Ru": 8, "W": 9,
 }
 
 # ---------------------------------------------------------------------------
@@ -641,6 +644,110 @@ def load_sweep_data(system: str) -> pd.DataFrame | None:
 
 
 # ---------------------------------------------------------------------------
+# MatterGen / MatterSim generated candidates
+# ---------------------------------------------------------------------------
+
+def discover_generated_systems() -> list[str]:
+    """Return systems that have both a hull CSV and relaxed CIF files."""
+    systems = []
+    for csv_path in sorted(RESULTS_DIR.glob("*_mattersim_hull.csv")):
+        system = csv_path.stem.replace("_mattersim_hull", "")
+        relaxed_dir = MATTERGEN_DIR / system / "relaxed"
+        if relaxed_dir.exists() and any(relaxed_dir.glob("*.cif")):
+            systems.append(system)
+    return systems
+
+
+@st.cache_data
+def load_hull_csv(system: str) -> pd.DataFrame | None:
+    path = RESULTS_DIR / f"{system}_mattersim_hull.csv"
+    if not path.exists():
+        return None
+    return pd.read_csv(path)
+
+
+@st.cache_data
+def load_generated_structure(system: str, idx: int) -> Structure | None:
+    relaxed_dir = MATTERGEN_DIR / system / "relaxed"
+    matches = list(relaxed_dir.glob(f"{system}_{idx:03d}_*.cif"))
+    if not matches:
+        return None
+    return Structure.from_file(str(matches[0]))
+
+
+def build_gen_hull_figure(hull_df: pd.DataFrame, system: str, highlight_idx: int) -> go.Figure:
+    """Convex hull scatter for MatterSim-relaxed generated candidates."""
+    el_b = system.split("-")[1]
+    fig = go.Figure()
+
+    off = hull_df[~hull_df["on_hull"]]
+    if not off.empty:
+        fig.add_trace(go.Scatter(
+            x=off["x_B"], y=off["e_form_eV_atom"],
+            mode="markers+text",
+            text=off["formula"],
+            textposition="top center",
+            textfont=dict(size=8),
+            marker=dict(size=8, color="#3366cc", opacity=0.75, symbol="circle",
+                        line=dict(width=0.5, color="black")),
+            name="Candidates",
+            hovertemplate="<b>%{text}</b><br>x_%s=%{x:.3f}<br>ΔE=%{y:.4f} eV/at<extra></extra>" % el_b,
+        ))
+
+    on = hull_df[hull_df["on_hull"]]
+    if not on.empty:
+        fig.add_trace(go.Scatter(
+            x=on["x_B"], y=on["e_form_eV_atom"],
+            mode="markers+text",
+            text=on["formula"],
+            textposition="top center",
+            textfont=dict(size=9, color="#22aa44"),
+            marker=dict(size=13, color="#22aa44", symbol="star",
+                        line=dict(width=1, color="black")),
+            name="On hull ★",
+            hovertemplate="<b>%{text}</b> ★<br>x_%s=%{x:.3f}<br>ΔE=%{y:.4f} eV/at<extra></extra>" % el_b,
+        ))
+
+    sel = hull_df[hull_df["idx"] == highlight_idx]
+    if not sel.empty:
+        fig.add_trace(go.Scatter(
+            x=sel["x_B"], y=sel["e_form_eV_atom"],
+            mode="markers",
+            marker=dict(size=18, color="#ff8c00", symbol="diamond",
+                        line=dict(width=2, color="black")),
+            name="Selected",
+            text=sel["formula"],
+            hovertemplate="<b>Selected: %{text}</b><br>x_%s=%{x:.3f}<br>ΔE=%{y:.4f} eV/at<extra></extra>" % el_b,
+        ))
+
+    valid = hull_df.dropna(subset=["e_form_eV_atom"])
+    if len(valid) >= 2:
+        from hullgap.dft.dft_hull import lower_convex_hull_2d
+        pts = np.array([[0.0, 0.0], [1.0, 0.0]]
+                       + list(zip(valid["x_B"], valid["e_form_eV_atom"])))
+        hull_line = lower_convex_hull_2d(pts)
+        fig.add_trace(go.Scatter(
+            x=hull_line[:, 0], y=hull_line[:, 1],
+            mode="lines",
+            line=dict(color="#3366cc", width=2, dash="dash"),
+            name="MatterSim hull",
+            hoverinfo="skip",
+        ))
+
+    fig.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.4)
+    fig.update_layout(
+        title=f"MatterSim convex hull — {system}",
+        xaxis_title=f"x_{el_b} (mole fraction)",
+        yaxis_title="Formation energy (eV/atom)",
+        height=420,
+        hovermode="closest",
+        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Main app
 # ---------------------------------------------------------------------------
 
@@ -670,11 +777,98 @@ def main() -> None:
         sc_b = st.slider("Supercell b", 1, 4, 2)
         sc_c = st.slider("Supercell c", 1, 4, 2)
 
-    tab_viz, tab_screen, tab_dft = st.tabs([
+    tab_gen, tab_viz, tab_screen, tab_dft = st.tabs([
+        "Generated Structures",
         "Structure Viewer",
         "MLIP Screening",
         "DFT Validation",
     ])
+
+    # ---- Tab 0: Generated Structures (MatterGen + MatterSim) ----
+    with tab_gen:
+        st.subheader("MatterGen candidates — MatterSim relaxed")
+
+        gen_systems = discover_generated_systems()
+
+        if not gen_systems:
+            st.info(
+                "No generated results found. Add `*_mattersim_hull.csv` files to "
+                "`data/results/` and CIF files to `data/mattergen/{system}/relaxed/` "
+                "to populate this tab."
+            )
+        else:
+            col_sys, col_refresh = st.columns([4, 1])
+            with col_sys:
+                gen_system = st.selectbox(
+                    "Chemical system", gen_systems, key="gen_system",
+                    help="Systems are discovered automatically from data/results/",
+                )
+            with col_refresh:
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                if st.button("↺ Refresh", key="gen_refresh", use_container_width=True):
+                    st.cache_data.clear()
+                    st.rerun()
+
+            hull_df = load_hull_csv(gen_system)
+
+            if hull_df is None or hull_df.empty:
+                st.warning(f"No hull data found for {gen_system}.")
+            else:
+                def _label(row: pd.Series) -> str:
+                    ehull_meV = row["e_above_hull_eV_atom"] * 1000
+                    star = " ★" if row["on_hull"] else ""
+                    return f"#{int(row['idx'])}  {row['formula']}  ·  Ehull = {ehull_meV:.0f} meV/atom{star}"
+
+                labels = hull_df.apply(_label, axis=1).tolist()
+                selected_label = st.selectbox(
+                    "Crystal structure", labels, key="gen_crystal",
+                    help="★ = on the convex hull (thermodynamically stable)",
+                )
+                sel_pos = labels.index(selected_label)
+                sel_row = hull_df.iloc[sel_pos]
+                sel_idx = int(sel_row["idx"])
+
+                struct = load_generated_structure(gen_system, sel_idx)
+
+                if struct is None:
+                    st.error(f"CIF not found for {gen_system} index {sel_idx}.")
+                else:
+                    col_viz3d, col_info3d = st.columns([3, 1])
+
+                    with col_viz3d:
+                        fig3d = build_structure_figure(
+                            struct,
+                            f"{gen_system} #{sel_idx} — {sel_row['formula']}",
+                            supercell=(sc_a, sc_b, sc_c),
+                        )
+                        st.plotly_chart(fig3d, use_container_width=True)
+
+                    with col_info3d:
+                        st.subheader("Structure info")
+                        st.markdown(f"**System:** {gen_system}")
+                        st.markdown(f"**Formula:** {sel_row['formula']}")
+                        st.markdown(f"**Atoms:** {int(sel_row['n_atoms'])}")
+                        st.markdown(f"**E\\_form:** {sel_row['e_form_eV_atom']*1000:.1f} meV/atom")
+
+                        ehull_meV = sel_row["e_above_hull_eV_atom"] * 1000
+                        if sel_row["on_hull"]:
+                            st.success(f"**E\\_hull:** {ehull_meV:.0f} meV/atom  ★ on hull")
+                        else:
+                            st.markdown(f"**E\\_hull:** {ehull_meV:.1f} meV/atom")
+
+                        cp = struct.lattice.parameters
+                        st.markdown("**Lattice:**")
+                        st.markdown(
+                            f"a = {cp[0]:.3f} Å, b = {cp[1]:.3f} Å, c = {cp[2]:.3f} Å  \n"
+                            f"α = {cp[3]:.1f}°, β = {cp[4]:.1f}°, γ = {cp[5]:.1f}°"
+                        )
+                        st.markdown(f"**Volume:** {struct.lattice.volume:.2f} ų")
+                        st.markdown(f"**Status:** {sel_row['status']}")
+
+                st.divider()
+                st.markdown("#### Convex hull")
+                fig_hull = build_gen_hull_figure(hull_df, gen_system, sel_idx)
+                st.plotly_chart(fig_hull, use_container_width=True)
 
     # ---- Tab 1: Structure Viewer ----
     with tab_viz:

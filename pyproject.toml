@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10,<3.12"
 
 dependencies = [
-    "pymatgen>=2024.1",
+    "pymatgen>=2024.1,<2026.3.23",
     "pandas>=2.0",
     "numpy>=1.24,<2.0",
     "scipy>=1.10",

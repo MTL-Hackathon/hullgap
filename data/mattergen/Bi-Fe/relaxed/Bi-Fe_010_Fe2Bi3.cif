@@ -1,0 +1,31 @@
+# generated using pymatgen
+data_Fe2Bi3
+_symmetry_space_group_name_H-M   'P 1'
+_cell_length_a   3.96795988
+_cell_length_b   4.05944718
+_cell_length_c   7.23024559
+_cell_angle_alpha   90.14370969
+_cell_angle_beta   105.83296052
+_cell_angle_gamma   89.96287360
+_symmetry_Int_Tables_number   1
+_chemical_formula_structural   Fe2Bi3
+_chemical_formula_sum   'Fe2 Bi3'
+_cell_volume   112.04398594
+_cell_formula_units_Z   1
+loop_
+ _symmetry_equiv_pos_site_id
+ _symmetry_equiv_pos_as_xyz
+  1  'x, y, z'
+loop_
+ _atom_site_type_symbol
+ _atom_site_label
+ _atom_site_symmetry_multiplicity
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+  Bi  Bi0  1  0.05199616  0.89863211  0.53510052  1
+  Fe  Fe1  1  0.90452600  0.39828539  0.23626274  1
+  Fe  Fe2  1  0.50235605  0.39788124  0.43426588  1
+  Bi  Bi3  1  0.70300847  0.39787164  0.83407313  1
+  Bi  Bi4  1  0.35447332  0.89898258  0.13482586  1
