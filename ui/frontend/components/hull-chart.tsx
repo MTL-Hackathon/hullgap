@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ScatterChart,
   Scatter,
   XAxis,
   YAxis,
@@ -20,16 +19,28 @@ interface HullPoint {
   stable: boolean;
 }
 
+interface MpPoint {
+  x_B: number;
+  energy: number;
+  formula: string;
+  stable: boolean;
+  source?: string;
+}
+
 interface Props {
   data: HullPoint[];
+  mpData?: MpPoint[];
   elementA: string;
   elementB: string;
   title?: string;
 }
 
-export function HullChart({ data, elementA, elementB, title }: Props) {
+export function HullChart({ data, mpData, elementA, elementB, title }: Props) {
   const onHull = data.filter((d) => d.stable);
   const aboveHull = data.filter((d) => !d.stable);
+
+  const allMp = mpData ?? [];
+  const chartKey = `${elementA}-${elementB}-${allMp.length}`;
 
   const hullLineInner = (() => {
     const byX = new Map<number, HullPoint>();
@@ -53,13 +64,15 @@ export function HullChart({ data, elementA, elementB, title }: Props) {
           {title}
         </h3>
       )}
-      <ResponsiveContainer width="100%" height={320}>
+      <ResponsiveContainer key={chartKey} width="100%" height={320}>
         <ComposedChart margin={{ top: 10, right: 20, bottom: 30, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
           <XAxis
             dataKey="x_B"
             type="number"
-            domain={[-0.05, 1.05]}
+            domain={[0, 1]}
+            allowDataOverflow
+            tickCount={6}
             label={{
               value: `x(${elementB})`,
               position: "insideBottom",
@@ -85,9 +98,10 @@ export function HullChart({ data, elementA, elementB, title }: Props) {
               if (!payload || payload.length === 0) return null;
               const d = payload[0]?.payload;
               if (!d) return null;
+              const source = d.source === "mp" ? " (MP)" : "";
               return (
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
-                  <p className="font-semibold">{d.formula || "Endpoint"}</p>
+                  <p className="font-semibold">{d.formula || "Endpoint"}{source}</p>
                   <p className="text-slate-500">
                     x(B) = {d.x_B?.toFixed(3)} | E = {d.energy?.toFixed(4)} eV/atom
                   </p>
@@ -108,6 +122,14 @@ export function HullChart({ data, elementA, elementB, title }: Props) {
             dot={false}
             name="Convex hull"
             legendType="line"
+          />
+          <Scatter
+            data={allMp}
+            dataKey="energy"
+            fill="#ef4444"
+            name="Materials Project"
+            opacity={0.7}
+            r={5}
           />
           <Scatter
             data={aboveHull}

@@ -374,11 +374,12 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
   const binaryCountsRef = useRef<Record<string, { total: number; stable: number }>>({});
   const binaryAbortRef  = useRef<AbortController | null>(null);
   const enScaleRef = useRef(2.5);
+  const shapeRef   = useRef<number[]>([]);
 
   const [selectedA, setSelectedA] = useState<number | null>(null);
   const [selectedB, setSelectedB] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  const [nCandidates, setNCandidates] = useState(50);
+  const [nCandidates, setNCandidates] = useState(12);
 
   // MP phase data
   interface MpPhase {
@@ -561,82 +562,75 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     }
 
     // ── elements (3 passes: bg → normal → hovered) ─────────────────────
+    // Unified draw: interpolates shape between square (grid) and circle
+    // (scatter) using shapeRef (0 = square, 1 = circle).
     const drawEl = (i: number) => {
       const el  = ELEMENTS[i];
       const pos = posRef.current[i];
       const opa = opacityRef.current[i];
       if (!pos || opa < 0.01) return;
 
-      const isAnchor  = i === selA;
+      const isAnchor   = i === selA;
       const isSelected = i === selB;
-      const isHovered = i === hov && el.relevant;
-      const scale     = (isHovered || isSelected) ? 1.14 : 1.0;
-      const size      = cs * scale;
-      const c         = CAT_COLORS[el.cat];
+      const isHovered  = i === hov && el.relevant;
+      const hScale     = (isHovered || isSelected) ? 1.14 : 1.0;
+      const c          = CAT_COLORS[el.cat];
+      const shape      = shapeRef.current[i] ?? 0;
+
+      // Interpolate size: grid square ↔ scatter circle
+      const gridSize    = cs * hScale;
+      const scatterDiam = scatterR(el, cs) * 2 * hScale;
+      const size        = gridSize + (scatterDiam - gridSize) * shape;
+      const bRadius     = 5 + (size / 2 - 5) * shape;
 
       ctx.save();
       ctx.globalAlpha = opa;
 
-      if ((m === "scatter" || m === "compound") && el.relevant) {
-        const r = scatterR(el, cs) * scale;
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+      const bx = pos.x - size / 2;
+      const by = pos.y - size / 2;
+      drawRoundRect(ctx, bx, by, size, size, bRadius);
 
-        if (isAnchor) {
+      const isScatter = shape > 0.5;
+
+      if (isAnchor) {
+        if (isScatter) {
           ctx.fillStyle = c.fill;
           ctx.fill();
           ctx.strokeStyle = "#3b82f6";
           ctx.lineWidth = 3;
           ctx.stroke();
-        } else if (isSelected) {
-          ctx.fillStyle = c.fill;
-          ctx.fill();
-          ctx.strokeStyle = "#10b981";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-        } else if (isHovered) {
-          ctx.fillStyle = c.fill;
-          ctx.fill();
         } else {
-          ctx.fillStyle = c.bg;
-          ctx.fill();
-          ctx.strokeStyle = c.stroke;
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
-
-        ctx.fillStyle = (isAnchor || isSelected || isHovered) ? "#fff" : c.text;
-        ctx.font = `600 ${Math.max(9, Math.round(r * 0.7))}px ${font}`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(el.s, pos.x, pos.y);
-      } else {
-        const bx = pos.x - size / 2;
-        const by = pos.y - size / 2;
-        drawRoundRect(ctx, bx, by, size, size, 5);
-
-        if (isAnchor) {
           ctx.fillStyle = "#3b82f6";
           ctx.fill();
-          ctx.fillStyle = "#fff";
-        } else if (isHovered) {
-          ctx.fillStyle = c.fill;
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-        } else {
-          ctx.fillStyle = c.bg;
-          ctx.fill();
-          ctx.strokeStyle = c.stroke;
-          ctx.lineWidth = el.relevant ? 1.5 : 0.8;
-          ctx.stroke();
-          ctx.fillStyle = c.text;
         }
-
-        ctx.font = `600 ${Math.max(8, Math.round(size * 0.32))}px ${font}`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(el.s, pos.x, pos.y);
+        ctx.fillStyle = "#fff";
+      } else if (isSelected) {
+        ctx.fillStyle = c.fill;
+        ctx.fill();
+        ctx.strokeStyle = "#10b981";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = "#fff";
+      } else if (isHovered) {
+        ctx.fillStyle = c.fill;
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+      } else {
+        ctx.fillStyle = c.bg;
+        ctx.fill();
+        ctx.strokeStyle = c.stroke;
+        ctx.lineWidth = el.relevant ? 1.5 : 0.8;
+        ctx.stroke();
+        ctx.fillStyle = c.text;
       }
+
+      const scatterFont = Math.max(9, Math.round(scatterDiam * 0.35));
+      const gridFont    = Math.max(8, Math.round(gridSize * 0.32));
+      const fontSize    = Math.round(gridFont + (scatterFont - gridFont) * shape);
+      ctx.font = `600 ${fontSize}px ${font}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(el.s, pos.x, pos.y);
 
       ctx.restore();
     };
@@ -647,8 +641,8 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
 
     if (tooltipRef.current && hov !== null && posRef.current[hov]) {
       const p = posRef.current[hov];
-      const hovR = ((m === "scatter" || m === "compound") && ELEMENTS[hov].relevant)
-        ? scatterR(ELEMENTS[hov], cs) : cs / 2;
+      const shape = shapeRef.current[hov] ?? 0;
+      const hovR = cs / 2 + (scatterR(ELEMENTS[hov], cs) - cs / 2) * shape;
       tooltipRef.current.style.transform =
         `translate(${p.x}px, ${p.y - hovR - 6}px)`;
     }
@@ -680,6 +674,18 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
         done = false;
       } else {
         opacityRef.current[i] = target;
+      }
+    });
+
+    // Morph shape: 0 = square (grid), 1 = circle (scatter/compound)
+    const shapeTarget = (m === "scatter" || m === "compound") ? 1 : 0;
+    shapeRef.current.forEach((s, i) => {
+      const diff = shapeTarget - s;
+      if (Math.abs(diff) > 0.005) {
+        shapeRef.current[i] = s + diff * LERP;
+        done = false;
+      } else {
+        shapeRef.current[i] = shapeTarget;
       }
     });
 
@@ -924,8 +930,10 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
       goScatter(w, selARef.current);
     else goGrid(w);
     posRef.current = tgtRef.current.map(p => ({ ...p }));
+    const targetShape = (m === "scatter" || m === "compound") ? 1 : 0;
     ELEMENTS.forEach((el, i) => {
       opacityRef.current[i] = opaTarget(el, i, m);
+      shapeRef.current[i] = targetShape;
     });
     draw();
   }, [goGrid, goScatter, draw]);
@@ -948,6 +956,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
     tgtRef.current = tgts;
     posRef.current = tgts.map(p => ({ ...p }));
     opacityRef.current = ELEMENTS.map(el => el.relevant ? 1.0 : INACTIVE_ALPHA);
+    shapeRef.current = ELEMENTS.map(() => 0);
     draw();
 
     canvas.addEventListener("click",      onCanvasClick);
@@ -982,7 +991,7 @@ export function ElementMap({ onGenerate, isGenerating }: ElementMapProps = {}) {
             ? `${elA.n}–${elB.n} selected — see details below. Click another element to change, or ${elA.s} to reset.`
             : mode === "scatter" && elA
               ? `${elA.n} selected — pick a second element to explore the binary compound, or click ${elA.s} to reset.`
-              : "Click any relevant element to anchor it and explore electronegativity space."}
+              : "Highlighted elements are microelectronics-relevant. Click one to anchor it and explore electronegativity space."}
         </p>
       </div>
 

@@ -1,4 +1,4 @@
-import type { CandidateResult, MaceResult, StructureData } from "./types";
+import type { CandidateResult, MaceResult, MpPhase, StructureData } from "./types";
 
 export async function generateCandidates(
   elementA: string,
@@ -55,4 +55,14 @@ export async function fetchStructure(
     throw new Error(err || "Failed to fetch structure");
   }
   return res.json();
+}
+
+export async function fetchMpPhases(
+  elementA: string,
+  elementB: string
+): Promise<MpPhase[]> {
+  const res = await fetch(`/api/mp-phases?a=${elementA}&b=${elementB}`);
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.phases ?? [];
 }

@@ -8,8 +8,8 @@ import {
   useState,
 } from "react";
 import { ArrowLeft, Loader2, Search, Download, Eye } from "lucide-react";
-import { generateCandidates, validateWithMace } from "@/lib/api-client";
-import type { CandidateResult, MaceResult } from "@/lib/types";
+import { generateCandidates, validateWithMace, fetchMpPhases } from "@/lib/api-client";
+import type { CandidateResult, MaceResult, MpPhase } from "@/lib/types";
 import { HeroSection } from "./hero-section";
 import { ElementMap } from "./element-map";
 import { FloatingElements } from "./floating-elements";
@@ -18,6 +18,20 @@ import { CandidateTable } from "./candidate-table";
 import { ResultsTable } from "./results-table";
 import { HullChart } from "./hull-chart";
 import { CrystalViewer } from "./crystal-viewer";
+
+function computeXB(formula: string, elementB: string): number {
+  const re = /([A-Z][a-z]?)(\d*)/g;
+  let totalAtoms = 0;
+  let bAtoms = 0;
+  let match;
+  while ((match = re.exec(formula)) !== null) {
+    if (!match[1]) continue;
+    const count = match[2] ? parseInt(match[2], 10) : 1;
+    totalAtoms += count;
+    if (match[1] === elementB) bAtoms += count;
+  }
+  return totalAtoms > 0 ? bAtoms / totalAtoms : 0;
+}
 
 export function Workspace() {
   const [elementA, setElementA] = useState("Co");
@@ -32,10 +46,10 @@ export function Workspace() {
   const [sliderHeight, setSliderHeight] = useState<number | undefined>(undefined);
   const [crystalSystemFilter, setCrystalSystemFilter] = useState<Set<string>>(new Set());
 
+  const [mpPhases, setMpPhases] = useState<MpPhase[]>([]);
   const [viewerVisited, setViewerVisited] = useState(false);
 
   const [assembled, setAssembled] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(true);
   const [canvasRevealed, setCanvasRevealed] = useState(false);
 
   const mainRef = useRef<HTMLElement>(null);
@@ -57,9 +71,11 @@ export function Workspace() {
   }, [assembled]);
 
   useEffect(() => {
-    if (assembled) return;
     const onScroll = () => {
-      if (window.scrollY > 100) setAssembled(true);
+      const threshold = assembled ? 80 : 200;
+      const shouldAssemble = window.scrollY > threshold;
+      if (shouldAssemble && !assembled) setAssembled(true);
+      if (!shouldAssemble && assembled) setAssembled(false);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -69,8 +85,8 @@ export function Workspace() {
     setCanvasRevealed(true);
   }, []);
 
-  const handleOverlayComplete = useCallback(() => {
-    setShowOverlay(false);
+  const handleDisassembled = useCallback(() => {
+    setCanvasRevealed(false);
   }, []);
 
   const runGenerate = useCallback(async (elA: string, elB: string, n: number) => {
@@ -80,10 +96,14 @@ export function Workspace() {
     setGenLoading(true);
     setCandidates(null);
     setMaceResults(null);
+    setMpPhases([]);
     setSelected(new Set());
     setCrystalSystemFilter(new Set());
     try {
-      const res = await generateCandidates(elA, elB, n);
+      const [res] = await Promise.all([
+        generateCandidates(elA, elB, n),
+        fetchMpPhases(elA, elB).then(setMpPhases).catch(() => {}),
+      ]);
       setCandidates(res);
       const stableIndices = new Set<number>();
       res.forEach((c, i) => {
@@ -168,6 +188,23 @@ export function Workspace() {
     }));
   }, [candidates]);
 
+  const mpHullData = useMemo(() => {
+    if (!mpPhases.length) return [];
+    return mpPhases
+      .filter((p) => p.formation_energy != null)
+      .map((p) => {
+        const xB = computeXB(p.formula, elementB);
+        return {
+          x_B: xB,
+          energy: p.formation_energy,
+          formula: p.formula,
+          stable: p.is_stable,
+          source: "mp" as const,
+        };
+      })
+      .filter((p) => p.x_B > 0 && p.x_B < 1);
+  }, [mpPhases, elementB]);
+
   const maceHullData = useMemo(() => {
     if (!maceResults) return [];
     return maceResults.map((r) => ({
@@ -248,7 +285,7 @@ export function Workspace() {
               <img
                 src="/logo.png"
                 alt="Matter of Fact"
-                className="h-[28px] object-contain"
+                className="h-[40px] object-contain"
               />
             </div>
           </div>
@@ -256,13 +293,11 @@ export function Workspace() {
       </header>
 
       {/* Floating elements overlay */}
-      {showOverlay && (
-        <FloatingElements
-          assembled={assembled}
-          onLanded={handleOverlayLanded}
-          onComplete={handleOverlayComplete}
-        />
-      )}
+      <FloatingElements
+        assembled={assembled}
+        onLanded={handleOverlayLanded}
+        onDisassembled={handleDisassembled}
+      />
 
       {/* Hero */}
       <HeroSection onGetStarted={scrollToPeriodicTable} />
@@ -271,8 +306,8 @@ export function Workspace() {
       <div
         style={{
           opacity: canvasRevealed ? 1 : 0,
-          transition: canvasRevealed && showOverlay ? "opacity 0.35s ease" : "none",
-          pointerEvents: showOverlay ? "none" : "auto",
+          transition: "opacity 0.35s ease",
+          pointerEvents: canvasRevealed ? "auto" : "none",
         }}
       >
 
@@ -303,6 +338,25 @@ export function Workspace() {
       {/* Main workspace — only shown once candidates exist */}
       {candidates && (
       <main ref={mainRef} className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <div className="mb-6">
+          <StepTracker
+            step={step}
+            stepIndex={stepIndex}
+            canOpenCandidates={Boolean(candidates)}
+            canOpenValidation={Boolean(maceResults)}
+            canOpenViewer={viewerVisited}
+            onOpenCandidates={() => {
+              if (candidates) setStep("candidates");
+            }}
+            onOpenValidation={() => {
+              if (maceResults) setStep("validation");
+            }}
+            onOpenViewer={() => {
+              if (viewerVisited) setStep("viewer");
+            }}
+          />
+        </div>
+
         <div className="relative">
           {step !== "candidates" && (
             <button
@@ -350,6 +404,7 @@ export function Workspace() {
                     <div className="mt-5">
                       <HullChart
                         data={candidateHullData}
+                        mpData={mpHullData}
                         elementA={elementA}
                         elementB={elementB}
                         title={`${elementA}\u2013${elementB} convex hull`}
@@ -462,6 +517,7 @@ export function Workspace() {
                     <div className="mt-5">
                       <HullChart
                         data={maceHullData}
+                        mpData={mpHullData}
                         elementA={elementA}
                         elementB={elementB}
                         title={`${elementA}\u2013${elementB} MACE convex hull`}

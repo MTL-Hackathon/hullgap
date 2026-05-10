@@ -70,6 +70,7 @@ const RELEVANT = new Set([
 const INACTIVE_ALPHA = 0.15;
 const PAD = 16;
 const GAP = 2;
+const CONNECTION_DIST = 150;
 
 function srand(seed: number): number {
   const x = Math.sin(seed * 9301 + 49297) * 233280;
@@ -84,24 +85,30 @@ function gridY(row: number, step: number): number {
 interface Props {
   assembled: boolean;
   onLanded?: () => void;
-  onComplete?: () => void;
+  onDisassembled?: () => void;
 }
 
-export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
+export function FloatingElements({ assembled, onLanded, onDisassembled }: Props) {
   const [dims, setDims] = useState<{ vw: number; vh: number } | null>(null);
-  const [visible, setVisible] = useState(true);
   const [fading, setFading] = useState(false);
+  const [posReady, setPosReady] = useState(false);
+  const [linesVisible, setLinesVisible] = useState(true);
+  const [floatEpoch, setFloatEpoch] = useState(0);
 
   const phaseRef = useRef<"float" | "fly" | "done">("float");
   const elemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const posRef = useRef<{ x: number; y: number; s: number; o: number }[]>([]);
+  const velRef = useRef<{ vx: number; vy: number }[]>([]);
   const posInitRef = useRef(false);
-  const rafRef = useRef(0);
+  const floatRafRef = useRef(0);
+  const flyRafRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lineCanvasRef = useRef<HTMLCanvasElement>(null);
+  const prevAssembledRef = useRef(assembled);
   const onLandedRef = useRef(onLanded);
   onLandedRef.current = onLanded;
-  const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+  const onDisassembledRef = useRef(onDisassembled);
+  onDisassembledRef.current = onDisassembled;
 
   useEffect(() => {
     const update = () => setDims({ vw: window.innerWidth, vh: window.innerHeight });
@@ -117,15 +124,13 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
         yPct: srand(i * 3 + 2),
         scale: 0.35 + srand(i * 3 + 3) * 0.55,
         opacity: 0.18 + srand(i * 13) * 0.42,
-        duration: 5 + srand(i * 5 + 6) * 7,
-        animOffset: srand(i * 11 + 8) * 10,
       })),
     [],
   );
 
   const tileSize = dims ? Math.max(28, Math.min(42, dims.vw / 30)) : 36;
 
-  // One-time position init
+  // Initialize positions and velocities
   useEffect(() => {
     if (!dims || posInitRef.current) return;
     posInitRef.current = true;
@@ -135,19 +140,138 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
       s: randoms[i].scale,
       o: randoms[i].opacity,
     }));
+    velRef.current = ELS.map((_, i) => {
+      const speed = 0.3 + srand(i * 7 + 17) * 0.4;
+      const angle = srand(i * 7 + 11) * Math.PI * 2;
+      return { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed };
+    });
+    setPosReady(true);
   }, [dims, randoms, tileSize]);
 
-  // Fly animation — reads the real canvas position each frame so it tracks scroll
+  // Size the connection-line canvas
+  useEffect(() => {
+    if (!dims) return;
+    const lc = lineCanvasRef.current;
+    if (!lc) return;
+    const dpr = window.devicePixelRatio || 1;
+    lc.width = Math.round(dims.vw * dpr);
+    lc.height = Math.round(dims.vh * dpr);
+    lc.style.width = dims.vw + "px";
+    lc.style.height = dims.vh + "px";
+    const ctx = lc.getContext("2d");
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }, [dims]);
+
+  // Screensaver drift + proximity connection lines
+  useEffect(() => {
+    if (!dims || !posReady || phaseRef.current !== "float") return;
+
+    const tick = () => {
+      if (phaseRef.current !== "float") return;
+
+      const pos = posRef.current;
+      const vel = velRef.current;
+      const maxX = dims.vw - tileSize;
+      const maxY = dims.vh - tileSize;
+
+      for (let i = 0; i < pos.length; i++) {
+        const p = pos[i];
+        const v = vel[i];
+        if (!v) continue;
+
+        p.x += v.vx;
+        p.y += v.vy;
+
+        if (p.x <= 0)    { p.x = 0;    v.vx = Math.abs(v.vx); }
+        else if (p.x >= maxX) { p.x = maxX; v.vx = -Math.abs(v.vx); }
+        if (p.y <= 0)    { p.y = 0;    v.vy = Math.abs(v.vy); }
+        else if (p.y >= maxY) { p.y = maxY; v.vy = -Math.abs(v.vy); }
+
+        const el = elemRefs.current[i];
+        if (el) {
+          el.style.transform = `translate(${p.x}px, ${p.y}px) scale(${p.s})`;
+        }
+      }
+
+      // Draw proximity connection lines
+      const lc = lineCanvasRef.current;
+      if (lc) {
+        const ctx = lc.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, dims.vw, dims.vh);
+          ctx.lineWidth = 2;
+
+          for (let i = 0; i < pos.length; i++) {
+            const cxi = pos[i].x + tileSize * pos[i].s * 0.5;
+            const cyi = pos[i].y + tileSize * pos[i].s * 0.5;
+            for (let j = i + 1; j < pos.length; j++) {
+              const cxj = pos[j].x + tileSize * pos[j].s * 0.5;
+              const cyj = pos[j].y + tileSize * pos[j].s * 0.5;
+              const dist = Math.hypot(cxj - cxi, cyj - cyi);
+              if (dist < CONNECTION_DIST) {
+                const alpha = (1 - dist / CONNECTION_DIST) * 0.18;
+                ctx.strokeStyle = `rgba(148,163,184,${alpha})`;
+                ctx.beginPath();
+                ctx.moveTo(cxi, cyi);
+                ctx.lineTo(cxj, cyj);
+                ctx.stroke();
+              }
+            }
+          }
+        }
+      }
+
+      floatRafRef.current = requestAnimationFrame(tick);
+    };
+
+    floatRafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(floatRafRef.current);
+  }, [dims, tileSize, posReady, floatEpoch]);
+
+  // Disassembly: when assembled goes true → false, restart floating
+  useEffect(() => {
+    const wasAssembled = prevAssembledRef.current;
+    prevAssembledRef.current = assembled;
+
+    if (wasAssembled && !assembled && phaseRef.current !== "float") {
+      cancelAnimationFrame(flyRafRef.current);
+      phaseRef.current = "float";
+      setFading(false);
+      setLinesVisible(true);
+
+      if (dims) {
+        const seed = Date.now() % 100000;
+        posRef.current = ELS.map((_, i) => ({
+          x: srand(i * 3 + 1 + seed) * (dims.vw - tileSize),
+          y: srand(i * 3 + 2 + seed) * (dims.vh - tileSize),
+          s: randoms[i].scale,
+          o: randoms[i].opacity,
+        }));
+        velRef.current = ELS.map((_, i) => {
+          const speed = 0.3 + srand(i * 7 + 17 + seed) * 0.4;
+          const angle = srand(i * 7 + 11 + seed) * Math.PI * 2;
+          return { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed };
+        });
+        elemRefs.current.forEach((el, i) => {
+          if (!el) return;
+          const p = posRef.current[i];
+          if (!p) return;
+          el.style.transform = `translate(${p.x}px, ${p.y}px) scale(${p.s})`;
+          el.style.opacity = String(p.o);
+        });
+      }
+
+      onDisassembledRef.current?.();
+      setFloatEpoch((e) => e + 1);
+    }
+  }, [assembled, dims, tileSize, randoms]);
+
+  // Fly-to-grid animation when assembled
   useEffect(() => {
     if (!assembled || phaseRef.current !== "float" || !dims) return;
     phaseRef.current = "fly";
-
-    // Kill CSS float animations immediately
-    elemRefs.current.forEach((el) => {
-      if (!el) return;
-      const inner = el.firstElementChild as HTMLElement | null;
-      if (inner) inner.style.animation = "none";
-    });
+    cancelAnimationFrame(floatRafRef.current);
+    setLinesVisible(false);
 
     const LERP_MIN = 0.045;
     const LERP_MAX = 0.25;
@@ -161,7 +285,7 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
         "#periodic-table canvas",
       ) as HTMLCanvasElement | null;
       if (!canvasEl) {
-        rafRef.current = requestAnimationFrame(tick);
+        flyRafRef.current = requestAnimationFrame(tick);
         return;
       }
 
@@ -227,21 +351,17 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
         phaseRef.current = "done";
         if (!landedFired) onLandedRef.current?.();
         setFading(true);
-        setTimeout(() => {
-          onCompleteRef.current?.();
-          setVisible(false);
-        }, 350);
         return;
       } else {
-        rafRef.current = requestAnimationFrame(tick);
+        flyRafRef.current = requestAnimationFrame(tick);
       }
     };
 
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    flyRafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(flyRafRef.current);
   }, [assembled, dims, tileSize]);
 
-  if (!dims || !visible) return null;
+  if (!dims) return null;
 
   return (
     <div
@@ -249,17 +369,17 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
       className="fixed inset-0 z-[15] pointer-events-none overflow-hidden"
       style={{
         opacity: fading ? 0 : 1,
-        transition: fading ? "opacity 0.35s ease-out" : "none",
+        transition: "opacity 0.35s ease-out",
       }}
     >
-      <style>{`
-        @keyframes el-float {
-          0%, 100% { transform: translate(0, 0); }
-          25%  { transform: translate(7px, -11px); }
-          50%  { transform: translate(-5px, 9px); }
-          75%  { transform: translate(9px, 4px); }
-        }
-      `}</style>
+      <canvas
+        ref={lineCanvasRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          opacity: linesVisible ? 1 : 0,
+          transition: "opacity 0.8s ease-out",
+        }}
+      />
 
       {ELS.map(([sym, cat], i) => {
         const r = randoms[i];
@@ -283,25 +403,18 @@ export function FloatingElements({ assembled, onLanded, onComplete }: Props) {
             }}
           >
             <div
-              className="w-full h-full"
+              className="flex items-center justify-center rounded-[4px] w-full h-full select-none"
               style={{
-                animation: `el-float ${r.duration}s ease-in-out infinite ${-r.animOffset}s`,
+                backgroundColor: c.bg,
+                border: `1.5px solid ${c.bd}`,
+                color: c.tx,
+                fontSize: Math.max(7, tileSize * 0.3),
+                fontWeight: 600,
+                fontFamily:
+                  "ui-sans-serif, system-ui, -apple-system, sans-serif",
               }}
             >
-              <div
-                className="flex items-center justify-center rounded-[4px] w-full h-full select-none"
-                style={{
-                  backgroundColor: c.bg,
-                  border: `1.5px solid ${c.bd}`,
-                  color: c.tx,
-                  fontSize: Math.max(7, tileSize * 0.3),
-                  fontWeight: 600,
-                  fontFamily:
-                    "ui-sans-serif, system-ui, -apple-system, sans-serif",
-                }}
-              >
-                {sym}
-              </div>
+              {sym}
             </div>
           </div>
         );

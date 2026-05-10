@@ -25,6 +25,25 @@ export interface ValidateRequest {
   candidates: CandidateResult[];
 }
 
+export interface MpPhase {
+  id: string;
+  formula: string;
+  spacegroup: string;
+  crystal_system: string;
+  e_above_hull: number;
+  formation_energy: number;
+  density: number;
+  n_sites: number;
+  volume: number;
+  is_stable: boolean;
+  a: number | null;
+  b: number | null;
+  c: number | null;
+  alpha: number | null;
+  beta: number | null;
+  gamma: number | null;
+}
+
 export interface StructureData {
   prototype: string;
   formula: string;
