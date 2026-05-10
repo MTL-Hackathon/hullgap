@@ -3,6 +3,9 @@ import { readFile, readdir } from "fs/promises";
 import { join } from "path";
 import { parseCif } from "@/lib/cif";
 
+export const dynamic: "force-static" | "auto" =
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? "force-static" : "auto";
+
 const DATA_DIR = join(process.cwd(), "..", "..", "data", "mattergen");
 
 /**

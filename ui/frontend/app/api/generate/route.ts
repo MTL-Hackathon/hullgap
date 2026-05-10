@@ -7,6 +7,9 @@ import {
   predictionsCsvRowsToCandidates,
 } from "@/lib/hull-csv";
 
+export const dynamic: "force-static" | "auto" =
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? "force-static" : "auto";
+
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 const DATA_DIR = join(process.cwd(), "..", "..", "data", "results");
 

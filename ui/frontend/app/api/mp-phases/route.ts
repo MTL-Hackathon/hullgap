@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic: "force-static" | "auto" =
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? "force-static" : "auto";
+
 const MP_API_KEY = process.env.MP_API_KEY || "LvVhu7zKRmTIDG60frvRksYdC0q4W0C3";
 const MP_BASE = "https://api.materialsproject.org";
 
