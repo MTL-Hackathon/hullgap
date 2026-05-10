@@ -1,6 +1,0 @@
-# Per-atom reference energies (eV) from QE PBE/PAW SCF calculations.
-# Co: HCP, 2-atom cell, ecutwfc=40 Ry, ecutrho=320 Ry, 4x4x2 k-grid.
-# Bi: rhombohedral, 2-atom cell, ecutwfc=40 Ry, ecutrho=320 Ry, 3x3x3 k-grid.
-# Run inputs: dft/runs/references/{Co,Bi}/pw.in
-Co: -5119.236014
-Bi: -12331.422421

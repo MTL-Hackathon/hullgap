@@ -11,24 +11,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_chgnet_calculator() -> Calculator:
+def get_chgnet_calculator(use_device: str = "cpu") -> Calculator:
     """Load the pretrained CHGNet model and return an ASE calculator.
 
-    Raises
-    ------
-    ImportError
-        If ``chgnet`` is not installed.
+    Parameters
+    ----------
+    use_device
+        Torch device string. Defaults to ``"cpu"`` for safe multiprocessing.
     """
     try:
         from chgnet.model.dynamics import CHGNetCalculator
     except ImportError as exc:
         raise ImportError(
             "CHGNet is not installed. Install it with:\n"
-            "  pip install chgnet\n"
-            "See INSTALL.md for details."
+            "  pip install chgnet"
         ) from exc
 
-    logger.info("Loading CHGNet pretrained model …")
-    calc = CHGNetCalculator()
+    logger.info("Loading CHGNet pretrained model (device=%s) …", use_device)
+    calc = CHGNetCalculator(use_device=use_device)
     logger.info("CHGNet calculator ready.")
     return calc

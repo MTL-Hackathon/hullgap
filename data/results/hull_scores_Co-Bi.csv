@@ -1,2 +1,0 @@
-candidate_id,formula,system,predicted_status,e_above_hull_eV_atom,relaxed_file,n_atoms,source_prototype
-candidate_demo_001,CoBi,Co-Bi,near_hull,0.03,data/relaxed/Co-Bi/candidate_demo_001.cif,2,demo_cscl

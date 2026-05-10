@@ -13,7 +13,7 @@ Prioritize:
 - Clear experiment logs and saved outputs.
 - Simple baselines before complex ML.
 
-The main source of truth for setup is `INSTALL.md`.
+The main source of truth for setup is `pyproject.toml`.
 The main source of truth for running the demo is `scripts/run_demo.sh`.
 
 Before making changes:

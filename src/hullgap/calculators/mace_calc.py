@@ -1,4 +1,4 @@
-"""MACE-MP calculator wrapper for ASE relaxations (optional backup model)."""
+"""MACE-MP calculator wrapper for ASE relaxations."""
 
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_mace_calculator(model_path: str | None = None) -> Calculator:
+def get_mace_calculator(
+    model_path: str | None = None,
+    device: str = "cpu",
+) -> Calculator:
     """Load MACE-MP and return an ASE calculator.
 
     Parameters
@@ -19,22 +22,12 @@ def get_mace_calculator(model_path: str | None = None) -> Calculator:
     model_path
         Path to a local MACE model file.  If *None*, uses the default
         MACE-MP-0 medium foundation model downloaded on first use.
-
-    Raises
-    ------
-    ImportError
-        If ``mace-torch`` is not installed.
+    device
+        Torch device string. Defaults to ``"cpu"`` for safe multiprocessing.
     """
-    try:
-        from mace.calculators import mace_mp
-    except ImportError as exc:
-        raise ImportError(
-            "MACE-MP is not installed. Install it with:\n"
-            "  pip install mace-torch\n"
-            "MACE is optional; CHGNet is the default model."
-        ) from exc
+    from mace.calculators import mace_mp
 
-    logger.info("Loading MACE-MP foundation model …")
-    calc = mace_mp(model=model_path, default_dtype="float64")
+    logger.info("Loading MACE-MP foundation model (device=%s) …", device)
+    calc = mace_mp(model=model_path, default_dtype="float64", device=device)
     logger.info("MACE-MP calculator ready.")
     return calc
