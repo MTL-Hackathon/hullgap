@@ -1,3 +1,15 @@
+---
+title: HullGap
+emoji: 🔬
+colorFrom: blue
+colorTo: indigo
+sdk: streamlit
+sdk_version: 1.39.0
+app_file: app/crystal_viewer.py
+pinned: false
+python_version: "3.11"
+---
+
 # HullGap
 
 **MLIP-guided discovery of missing stable crystal structures in underexplored chemical systems.**

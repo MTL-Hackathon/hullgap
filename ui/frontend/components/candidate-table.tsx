@@ -86,18 +86,45 @@ function relAgreement(a: number | null | undefined, b: number | null | undefined
   return Math.max(0, 1 - Math.abs(a - b) / denom);
 }
 
-function agreementScore(candidate: CandidateResult, mp: MpPhase): number {
+// Geometric agreement: average of per-quantity agreements over formula,
+// crystal system, atoms in cell, volume, and lattice (a, b, c, α, β, γ).
+// Lattice + volume require the loaded candidate structure; returns null
+// while structure is still loading so the column shows a spinner.
+function geometricAgreement(
+  candidate: CandidateResult,
+  mp: MpPhase,
+  structure: StructureData | null,
+): number | null {
+  if (!structure) return null;
   const parts: number[] = [];
-  const fe = relAgreement(candidate.formation_energy_eV_atom, mp.formation_energy);
-  if (fe != null) parts.push(fe);
-  const eh = relAgreement(candidate.e_above_hull_eV_atom, mp.e_above_hull);
-  if (eh != null) parts.push(eh);
+
+  parts.push(
+    compositionsEqual(
+      reducedComposition(candidate.formula),
+      reducedComposition(mp.formula),
+    )
+      ? 1
+      : 0,
+  );
   parts.push(
     candidate.crystal_system && mp.crystal_system &&
       candidate.crystal_system.toLowerCase() === mp.crystal_system.toLowerCase()
       ? 1
       : 0,
   );
+
+  const pushIf = (v: number | null) => {
+    if (v != null) parts.push(v);
+  };
+  pushIf(relAgreement(candidate.n_atoms, mp.n_sites));
+  pushIf(relAgreement(structure.volume, mp.volume));
+  pushIf(relAgreement(structure.lattice_params.a, mp.a));
+  pushIf(relAgreement(structure.lattice_params.b, mp.b));
+  pushIf(relAgreement(structure.lattice_params.c, mp.c));
+  pushIf(relAgreement(structure.lattice_params.alpha, mp.alpha));
+  pushIf(relAgreement(structure.lattice_params.beta, mp.beta));
+  pushIf(relAgreement(structure.lattice_params.gamma, mp.gamma));
+
   if (!parts.length) return 0;
   return parts.reduce((s, v) => s + v, 0) / parts.length;
 }
@@ -171,7 +198,12 @@ function ComparisonView({
           Comparison with Materials Project ({mp.id})
         </h4>
         <span className="text-xs font-semibold text-[var(--accent-dark)]">
-          Overall agreement: {(agreementScore(candidate, mp) * 100).toFixed(1)}%
+          {(() => {
+            const a = geometricAgreement(candidate, mp, structure);
+            return a == null
+              ? "Loading geometry…"
+              : `Overall agreement: ${(a * 100).toFixed(1)}%`;
+          })()}
         </span>
       </div>
 
@@ -198,18 +230,6 @@ function ComparisonView({
           label="Crystal system"
           candidate={candidate.crystal_system}
           mp={mp.crystal_system}
-        />
-        <ComparisonCell
-          label="Formation energy"
-          candidate={candidate.formation_energy_eV_atom}
-          mp={mp.formation_energy}
-          unit="eV/atom"
-        />
-        <ComparisonCell
-          label="E above hull"
-          candidate={candidate.e_above_hull_eV_atom}
-          mp={mp.e_above_hull}
-          unit="eV/atom"
         />
         <ComparisonCell
           label="x(B)"
@@ -527,6 +547,46 @@ export function CandidateTable({
     return candidates.map((c) => findMpMatch(c, mpPhases));
   }, [candidates, mpPhases]);
 
+  // Cache structures for matched candidates so the agreement column can
+  // include lattice + volume without waiting for the row to be expanded.
+  // Keyed by the candidate object (stable across filter re-renders within
+  // a generation; cleared on a new generation since references change).
+  const [structureCache, setStructureCache] = useState<
+    Map<CandidateResult, StructureData>
+  >(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    candidates.forEach((c, i) => {
+      if (!mpMatches[i]) return;
+      if (structureCache.has(c)) return;
+      const fetchPromise =
+        typeof c.idx === "number" && Number.isFinite(c.idx) && c.system
+          ? fetchStructureByIdx(c.system, c.idx).catch(() =>
+              fetchStructure(elementA, elementB, guessPrototype(c.x_B)),
+            )
+          : fetchStructure(elementA, elementB, guessPrototype(c.x_B));
+      fetchPromise
+        .then((data) => {
+          if (cancelled) return;
+          setStructureCache((prev) => {
+            if (prev.has(c)) return prev;
+            const next = new Map(prev);
+            next.set(c, data);
+            return next;
+          });
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+    // structureCache intentionally omitted: we read it inside the effect
+    // only to skip already-fetched entries; including it would re-run the
+    // effect on every successful fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, mpMatches, elementA, elementB]);
+
   const toggleExpand = useCallback((origIdx: number, mode: ExpandMode) => {
     setExpanded((prev) => {
       if (!prev || prev.idx !== origIdx) return { idx: origIdx, mode };
@@ -566,7 +626,11 @@ export function CandidateTable({
             const origIdx = originalIndices[localIdx];
             const isExpanded = expanded?.idx === origIdx;
             const mp = mpMatches[localIdx];
-            const agreement = mp ? agreementScore(c, mp) : null;
+            const cachedStructure = structureCache.get(c) ?? null;
+            const agreement = mp
+              ? geometricAgreement(c, mp, cachedStructure)
+              : null;
+            const agreementLoading = mp != null && agreement == null;
             const agreementTone =
               agreement == null
                 ? "text-slate-400"
@@ -647,9 +711,7 @@ export function CandidateTable({
                       toggleExpand(origIdx, "compare");
                     }}
                   >
-                    {agreement == null ? (
-                      <span className="text-slate-300">—</span>
-                    ) : (
+                    {agreement != null ? (
                       <button
                         type="button"
                         className={`tabular-nums font-semibold underline-offset-4 hover:underline ${agreementTone}`}
@@ -657,6 +719,10 @@ export function CandidateTable({
                       >
                         {(agreement * 100).toFixed(1)}%
                       </button>
+                    ) : agreementLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                    ) : (
+                      <span className="text-slate-300">—</span>
                     )}
                   </td>
                 </tr>
